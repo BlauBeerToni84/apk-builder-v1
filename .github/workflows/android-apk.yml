@@ -25,12 +25,17 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      # FIX: cmdline-tools korrekt entpacken + verschieben (Zip enthält Unterordner 'cmdline-tools')
       - name: Install Android SDK cmdline-tools
         run: |
+          set -eux
           ANDROID_HOME="$HOME/android-sdk"
+          mkdir -p "$ANDROID_HOME/cmdline-tools"
+          curl -sL https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o /tmp/cmdtools.zip
+          unzip -q /tmp/cmdtools.zip -d "$ANDROID_HOME"
+          # Nach dem Unzip liegt es als $ANDROID_HOME/cmdline-tools/**cmdline-tools**/...
           mkdir -p "$ANDROID_HOME/cmdline-tools/latest"
-          curl -sL https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o cmdtools.zip
-          unzip -q cmdtools.zip -d "$ANDROID_HOME/cmdline-tools/latest"
+          mv "$ANDROID_HOME/cmdline-tools/cmdline-tools/"* "$ANDROID_HOME/cmdline-tools/latest/" || true
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "build-tools;34.0.0" "platforms;android-34" >/dev/null
           echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
@@ -51,10 +56,9 @@ jobs:
             npm i --legacy-peer-deps
           fi
 
-      - name: Expo fix & prebuild (create android if missing)
+      - name: Expo prebuild (create android if missing)
         run: |
           npx expo --version || npm i -D expo
-          npx expo install --fix || true
           if [ ! -d android ]; then
             npx expo prebuild --platform android --no-install
           else
