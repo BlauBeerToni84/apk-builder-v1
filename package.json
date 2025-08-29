@@ -3,10 +3,14 @@
   "version": "1.0.0",
   "private": true,
   "main": "expo/AppEntry",
-  "scripts": { "start": "expo start", "android": "expo start --android", "web": "expo start --web" },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "web": "expo start --web"
+  },
   "dependencies": {
-    "expo": "^54.0.0",
-    "react": "18.3.1",
-    "react-native": "0.74.5"
+    "expo": "53.0.22",
+    "react": "18.2.0",
+    "react-native": "0.79.5"
   }
 }

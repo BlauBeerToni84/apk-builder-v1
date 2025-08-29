@@ -1,1 +1,96 @@
-[füge hier GENAU den YAML von oben ein]
+name: Android APK (Debug + optional Release)
+on: [workflow_dispatch, push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      CI: "true"
+      _JAVA_OPTIONS: "-Xmx3g -XX:+UseParallelGC"
+      GRADLE_OPTS: "-Xmx3g -Dorg.gradle.jvmargs=-Xmx3g -Dkotlin.daemon.heap.size=1024m"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: 34
+          build-tools: 34.0.0
+          components: platform-tools
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install deps
+        run: |
+          if [ -f package-lock.json ]; then npm ci --legacy-peer-deps; else npm i --legacy-peer-deps; fi
+
+      - name: Expo prebuild (create/clean android)
+        run: |
+          npx expo --version || npm i -D expo@53
+          npx expo install --fix || true
+          if [ ! -d android ]; then
+            npx expo prebuild --platform android --no-install
+          else
+            npx expo prebuild --platform android --no-install --clean || true
+          fi
+          ls -la android || true
+
+      - name: Build Debug (installierbar)
+        run: |
+          cd android
+          chmod +x ./gradlew || true
+          ./gradlew --no-daemon assembleDebug -x lint -x test
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-debug
+          path: android/app/build/outputs/apk/debug/*.apk
+
+      # ===== Optional: signierte Release-APK, wenn Secrets gesetzt =====
+      - name: Configure Release signing
+        if: ${{ secrets.ANDROID_KEYSTORE_B64 != '' }}
+        run: |
+          cd android
+          echo "$ANDROID_KEYSTORE_B64" | base64 -d > app/release.keystore
+          cat >> gradle.properties <<'PROPS'
+ANDROID_KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}
+ANDROID_KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}
+ANDROID_KEYSTORE_PASSWORD=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+PROPS
+          sed -i 's/android {/&\
+    signingConfigs {\
+        release {\
+            storeFile file("app\/release.keystore");\
+            storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: project.properties["ANDROID_KEYSTORE_PASSWORD"];\
+            keyAlias System.getenv("ANDROID_KEY_ALIAS") ?: project.properties["ANDROID_KEY_ALIAS"];\
+            keyPassword System.getenv("ANDROID_KEY_PASSWORD") ?: project.properties["ANDROID_KEY_PASSWORD"];\
+        }\
+    }\
+    buildTypes {\
+        release {\
+            signingConfig signingConfigs.release;\
+        }\
+    }/' app/build.gradle || true
+
+      - name: Build Release (optional)
+        if: ${{ secrets.ANDROID_KEYSTORE_B64 != '' }}
+        run: |
+          cd android
+          ./gradlew --no-daemon assembleRelease -x lint -x test
+
+      - name: Upload Release APK (optional)
+        if: ${{ secrets.ANDROID_KEYSTORE_B64 != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-release
+          path: android/app/build/outputs/apk/release/*.apk
