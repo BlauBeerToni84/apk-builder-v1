@@ -12,29 +12,30 @@ dependencyResolutionManagement {
     mavenCentral()
   }
 }
+
 rootProject.name = "app"
 include(":app")
 
-// RN autolinking
-
-// Expo (optional, falls vorhanden)
-def expoAutolinking = null
-try {
-  def out = new ByteArrayOutputStream()
-  def proc = ["node","--print","require.resolve('expo/autolinking')"].execute(null, rootDir)
-  proc.consumeProcessOutput(out, System.err)
-  proc.waitForOrKill(5000)
-  expoAutolinking = out.toString().trim()
-} catch (Exception ignored) {}
-if (expoAutolinking) {
-  apply from: new File(expoAutolinking, "android-settings.gradle")
-}
-
-/** RN autolinking (guarded) **/
+// ===== React Native autolinking (guarded) =====
 def rnCliGradle = file("../node_modules/@react-native-community/cli-platform-android/native_modules.gradle")
 if (rnCliGradle.exists()) {
   apply from: rnCliGradle
-  applyNativeModulesSettingsGradle(settings)
+  if (this.metaClass.respondsTo(this, "applyNativeModulesSettingsGradle", Object)) {
+    applyNativeModulesSettingsGradle(settings)
+  }
 } else {
-  println("⚠️ RN CLI Android script not found, skipping autolinking")
+  println("⚠️ RN CLI Android script not found, skipping RN autolinking")
+}
+
+// ===== Expo autolinking (guarded) =====
+try {
+  def expoAutolinkingScript = ["node", "--print", "require.resolve('expo/autolinking')"].execute(null, rootDir).text.trim()
+  def expoSettings = new File(expoAutolinkingScript, "android-settings.gradle")
+  if (expoSettings.exists()) {
+    apply from: expoSettings
+  } else {
+    println("ℹ️ Expo autolinking not present, skipping")
+  }
+} catch (Throwable t) {
+  println("ℹ️ Expo autolinking resolve failed, skipping")
 }
