@@ -4,13 +4,32 @@ on: { push: {}, workflow_dispatch: {} }
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     env:
       CI: "true"
       _JAVA_OPTIONS: "-Xmx3g -XX:+UseParallelGC"
-      GRADLE_OPTS: "-Xmx3g -Dorg.gradle.jvmargs=-Xmx3g -Dkotlin.daemon.heap.size=1024m"
+      GRADLE_OPTS: "-Xmx3g -Dorg.gradle.jvmargs=-Xmx3g -Dkotlin.daemon.heap.size=1024m -Dorg.gradle.workers.max=2"
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
+
+      # Caches
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Cache Node Modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+          key: node-${{ runner.os }}-${{ hashFiles('**/package-lock.json', '**/pnpm-lock.yaml', '**/yarn.lock') }}
+          restore-keys: node-${{ runner.os }}-
 
       - name: Set up Node 20
         uses: actions/setup-node@v4
@@ -28,9 +47,19 @@ jobs:
           components: platform-tools
 
       - name: Accept Android SDK licenses
+        timeout-minutes: 5
         run: yes | sdkmanager --licenses
 
+      - name: NPM robust config
+        run: |
+          npm config set legacy-peer-deps true
+          npm config set fetch-retry-maxtimeout 120000
+          npm config set fetch-retry-mintimeout 20000
+          npm config set fetch-retries 5
+          npm -v && node -v
+
       - name: Install JS deps (robust)
+        timeout-minutes: 20
         run: |
           if [ -f pnpm-lock.yaml ]; then
             corepack enable || true
@@ -41,9 +70,9 @@ jobs:
             corepack prepare yarn@4 --activate || true
             (yarn install --no-immutable || yarn install)
           elif [ -f package-lock.json ]; then
-            (npm ci --legacy-peer-deps || npm i --legacy-peer-deps)
+            (npm ci || npm i)
           else
-            npm i --legacy-peer-deps
+            npm i
           fi
 
       - name: Check android tree
@@ -53,12 +82,14 @@ jobs:
           sed -n '1,200p' android/settings.gradle || true
 
       - name: Gradle tasks (liste)
+        timeout-minutes: 5
         working-directory: android
         run: |
           chmod +x ./gradlew || true
           ./gradlew tasks --all --no-daemon --warning-mode all | tee ../gradle-tasks.txt || true
 
       - name: Build APK (debug)
+        timeout-minutes: 25
         working-directory: android
         run: |
           chmod +x ./gradlew || true
