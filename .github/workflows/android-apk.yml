@@ -5,11 +5,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '17' }
       - uses: android-actions/setup-android@v3
+
+      - name: Install JS deps (robust)
+        run: |
+          node -v && npm -v
+          if [ -f pnpm-lock.yaml ]; then
+            corepack enable || true
+            corepack prepare pnpm@8 --activate || npm i -g pnpm
+            pnpm install --no-frozen-lockfile
+          elif [ -f yarn.lock ]; then
+            corepack enable || true
+            corepack prepare yarn@4 --activate || true
+            (yarn install --no-immutable || yarn install)
+          elif [ -f package-lock.json ]; then
+            (npm ci --legacy-peer-deps || npm i --legacy-peer-deps)
+          else
+            npm i --legacy-peer-deps
+          fi
+          test -f node_modules/@react-native-community/cli-platform-android/native_modules.gradle && echo "RN CLI gradle present" || echo "RN CLI gradle MISSING"
         with:
           components: |
             platform-tools

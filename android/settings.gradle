@@ -16,8 +16,6 @@ rootProject.name = "app"
 include(":app")
 
 // RN autolinking
-apply from: file("../node_modules/@react-native-community/cli-platform-android/native_modules.gradle")
-applyNativeModulesSettingsGradle(settings)
 
 // Expo (optional, falls vorhanden)
 def expoAutolinking = null
@@ -30,4 +28,13 @@ try {
 } catch (Exception ignored) {}
 if (expoAutolinking) {
   apply from: new File(expoAutolinking, "android-settings.gradle")
+}
+
+/** RN autolinking (guarded) **/
+def rnCliGradle = file("../node_modules/@react-native-community/cli-platform-android/native_modules.gradle")
+if (rnCliGradle.exists()) {
+  apply from: rnCliGradle
+  applyNativeModulesSettingsGradle(settings)
+} else {
+  println("⚠️ RN CLI Android script not found, skipping autolinking")
 }
