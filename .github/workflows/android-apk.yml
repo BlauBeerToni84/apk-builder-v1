@@ -4,7 +4,7 @@ on: { push: {}, workflow_dispatch: {} }
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 40
     env:
       CI: "true"
       _JAVA_OPTIONS: "-Xmx3g -XX:+UseParallelGC"
@@ -87,31 +87,37 @@ jobs:
           ls -la android/gradlew || exit 1
           sed -n '1,200p' android/settings.gradle || true
 
-      # Warmup: holt Dependencies vorab, damit assemble weniger hängt
-      - name: Gradle warmup (:app:dependencies)
-        timeout-minutes: 10
+      # Force Gradle Wrapper 8.7 (stabil mit AGP/SDK 34)
+      - name: Ensure Gradle 8.7 wrapper
         working-directory: android
         run: |
           chmod +x ./gradlew || true
-          timeout -k 2m 10m ./gradlew :app:dependencies --no-daemon --warning-mode all --stacktrace || true
+          ./gradlew wrapper --gradle-version 8.7 --no-daemon || true
+          sed -n '1,120p' gradle/wrapper/gradle-wrapper.properties || true
+
+      # Warmup zieht Dependencies vorab
+      - name: Gradle warmup (:app:dependencies)
+        timeout-minutes: 8
+        working-directory: android
+        run: |
+          timeout -k 60s 7m ./gradlew :app:dependencies --no-daemon --warning-mode all --stacktrace || true
 
       - name: Gradle tasks (liste)
-        timeout-minutes: 5
+        timeout-minutes: 4
         working-directory: android
         run: |
           ./gradlew tasks --all --no-daemon --warning-mode all | tee ../gradle-tasks.txt || true
 
-      # Build separat, mit hartem Timeout (liefert Logs auch bei Hänger)
+      # Build mit hartem Timeout; Logs landen im Repo-Root
       - name: Build APK (debug)
-        timeout-minutes: 25
+        timeout-minutes: 20
         working-directory: android
         run: |
           chmod +x ./gradlew || true
           ./gradlew --version || true
           ./gradlew clean --no-daemon || true
-          # harter Timeout + ausführliches Logging
-          timeout -k 2m 22m ./gradlew assembleDebug -x lint --info --stacktrace --no-daemon --warning-mode all | tee ../gradle-build.log \
-            || timeout -k 2m 22m ./gradlew :app:assembleDebug -x lint --info --stacktrace --no-daemon --warning-mode all | tee -a ../gradle-build.log || true
+          timeout -k 60s 18m ./gradlew assembleDebug -x lint --info --stacktrace --no-daemon --warning-mode all | tee ../gradle-build.log \
+            || timeout -k 60s 18m ./gradlew :app:assembleDebug -x lint --info --stacktrace --no-daemon --warning-mode all | tee -a ../gradle-build.log || true
           echo "Outputs:"; find app/build/outputs -type f -maxdepth 4 -print || true
           cp -r app/build/outputs ../_outputs 2>/dev/null || true
 
