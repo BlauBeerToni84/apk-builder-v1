@@ -35,6 +35,16 @@ jobs:
           path: android/../gradle-build.log
           if-no-files-found: ignore
 
+      - name: Upload outputs folder
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: outputs
+          path: |
+            _outputs/**
+            android/**/outputs/**
+          if-no-files-found: warn
+
       - name: Upload APKs (any module/variant)
         if: always()
         uses: actions/upload-artifact@v4
