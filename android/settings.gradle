@@ -1,41 +1,33 @@
-pluginManagement { repositories { mavenCentral(); google(); gradlePluginPortal() } }
-dependencyResolutionManagement { repositories { mavenCentral(); google() } }
 pluginManagement {
-  def reactNativeGradlePlugin = new File(
-    providers.exec {
-      workingDir(rootDir)
-      commandLine("node", "--print", "require.resolve('@react-native/gradle-plugin/package.json', { paths: [require.resolve('react-native/package.json')] })")
-    }.standardOutput.asText.get().trim()
-  ).getParentFile().absolutePath
-  includeBuild(reactNativeGradlePlugin)
-  
-  def expoPluginsPath = new File(
-    providers.exec {
-      workingDir(rootDir)
-      commandLine("node", "--print", "require.resolve('expo-modules-autolinking/package.json', { paths: [require.resolve('expo/package.json')] })")
-    }.standardOutput.asText.get().trim(),
-    "../android/expo-gradle-plugin"
-  ).absolutePath
-  includeBuild(expoPluginsPath)
-}
-
-plugins {
-  id("com.facebook.react.settings")
-  id("expo-autolinking-settings")
-}
-
-extensions.configure(com.facebook.react.ReactSettingsExtension) { ex ->
-  if (System.getenv('EXPO_USE_COMMUNITY_AUTOLINKING') == '1') {
-    ex.autolinkLibrariesFromCommand()
-  } else {
-    ex.autolinkLibrariesFromCommand(expoAutolinking.rnConfigCommand)
+  repositories {
+    google()
+    mavenCentral()
+    gradlePluginPortal()
   }
 }
-expoAutolinking.useExpoModules()
+dependencyResolutionManagement {
+  repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+  repositories {
+    google()
+    mavenCentral()
+  }
+}
+rootProject.name = "app"
+include(":app")
 
-rootProject.name = 'k1w1APKBuilder'
+// RN autolinking
+apply from: file("../node_modules/@react-native-community/cli-platform-android/native_modules.gradle")
+applyNativeModulesSettingsGradle(settings)
 
-expoAutolinking.useExpoVersionCatalog()
-
-include ':app'
-includeBuild(expoAutolinking.reactNativeGradlePlugin)
+// Expo (optional, falls vorhanden)
+def expoAutolinking = null
+try {
+  def out = new ByteArrayOutputStream()
+  def proc = ["node","--print","require.resolve('expo/autolinking')"].execute(null, rootDir)
+  proc.consumeProcessOutput(out, System.err)
+  proc.waitForOrKill(5000)
+  expoAutolinking = out.toString().trim()
+} catch (Exception ignored) {}
+if (expoAutolinking) {
+  apply from: new File(expoAutolinking, "android-settings.gradle")
+}
