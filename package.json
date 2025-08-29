@@ -5,9 +5,8 @@
   "main": "expo/AppEntry",
   "scripts": {
     "start": "expo start",
-    "android": "expo run:android",
-    "web": "expo start --web",
-    "ios": "expo run:ios"
+    "android": "expo start --android",
+    "web": "expo start --web"
   },
   "dependencies": {
     "expo": "53.0.22",
