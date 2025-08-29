@@ -1,6 +1,5 @@
 name: Android Release (APK)
 on: [workflow_dispatch, push]
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -8,32 +7,24 @@ jobs:
       CI: "true"
       _JAVA_OPTIONS: "-Xmx3g -XX:+UseParallelGC"
       GRADLE_OPTS: "-Xmx3g -Dorg.gradle.jvmargs='-Xmx3g -Dkotlin.daemon.heap.size=1024m'"
-
     steps:
       - uses: actions/checkout@v4
-
       - name: Print baseline
         run: |
           node -v || true
           npm -v || true
           java -version || true
           uname -a
-
       - name: Set up JDK 17 (Temurin)
         uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      # FIX: cmdline-tools korrekt entpacken + verschieben (Zip enthält Unterordner 'cmdline-tools')
-      - name: Install Android SDK cmdline-tools
+        with: { distribution: temurin, java-version: '17' }
+      - name: Install Android SDK cmdline-tools (fix)
         run: |
           set -eux
           ANDROID_HOME="$HOME/android-sdk"
           mkdir -p "$ANDROID_HOME/cmdline-tools"
           curl -sL https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o /tmp/cmdtools.zip
           unzip -q /tmp/cmdtools.zip -d "$ANDROID_HOME"
-          # Nach dem Unzip liegt es als $ANDROID_HOME/cmdline-tools/**cmdline-tools**/...
           mkdir -p "$ANDROID_HOME/cmdline-tools/latest"
           mv "$ANDROID_HOME/cmdline-tools/cmdline-tools/"* "$ANDROID_HOME/cmdline-tools/latest/" || true
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
@@ -41,45 +32,20 @@ jobs:
           echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
           echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
           echo "$ANDROID_HOME/build-tools/34.0.0" >> $GITHUB_PATH
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install deps (prefer npm ci)
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: 'npm' }
+      - name: Install deps
         run: |
-          if [ -f package-lock.json ]; then
-            npm ci --legacy-peer-deps
-          else
-            npm i --legacy-peer-deps
-          fi
-
-      - name: Expo prebuild (create android if missing)
+          if [ -f package-lock.json ]; then npm ci --legacy-peer-deps; else npm i --legacy-peer-deps; fi
+      - name: Expo prebuild
         run: |
           npx expo --version || npm i -D expo
-          if [ ! -d android ]; then
-            npx expo prebuild --platform android --no-install
-          else
-            npx expo prebuild --platform android --no-install --clean || true
-          fi
+          if [ ! -d android ]; then npx expo prebuild --platform android --no-install; else npx expo prebuild --platform android --no-install --clean || true; fi
           ls -la android || true
-
-      - name: Show Gradle/AGP versions
-        run: |
-          cd android
-          grep -E "classpath|com.android.tools.build" build.gradle* settings.gradle* app/build.gradle* || true
-          ./gradlew --version || true
-
       - name: Gradle assembleRelease
         run: |
           cd android
           chmod +x ./gradlew || true
           ./gradlew --no-daemon assembleRelease -x lint -x test
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: apk
-          path: android/app/build/outputs/apk/release/*.apk
+      - uses: actions/upload-artifact@v4
+        with: { name: apk, path: android/app/build/outputs/apk/release/*.apk }
