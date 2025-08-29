@@ -16,16 +16,9 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Clean npm cache (safety)
-
-        run: |
-
-          npm cache clean --force || true
       - name: Install deps
-
         run: |
-
-          npm ci --legacy-peer-deps
+          npm i --legacy-peer-deps
 
       - name: Set up Android SDK (API 34)
         uses: android-actions/setup-android@v3
@@ -34,21 +27,18 @@ jobs:
           components: build-tools;34.0.0
 
       - name: Expo prebuild (create android)
-
-        env:
-
-          EXPO_NO_TELEMETRY: "1"
-
-          EXPO_DEBUG: "1"
-
         run: |
+          npx expo --version || npm i -D expo
+          npx expo prebuild --platform android --no-install
 
-          npx expo --version || npm i -D expo@53
+      - name: Build Debug (installierbar)
+        run: |
+          cd android
+          chmod +x ./gradlew || true
+          ./gradlew --no-daemon assembleDebug -x lint -x test
 
-          npx expo install --fix || true
-
-          npx expo prebuild --platform android --no-install --clean --non-interactive
-
-          ls -la android || true
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
           name: apk-debug
           path: android/app/build/outputs/apk/debug/*.apk
