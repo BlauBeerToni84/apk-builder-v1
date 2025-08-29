@@ -1,5 +1,6 @@
 name: Android APK (signed)
 on: [workflow_dispatch, push]
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -7,32 +8,41 @@ jobs:
       CI: "true"
       _JAVA_OPTIONS: "-Xmx3g -XX:+UseParallelGC"
       GRADLE_OPTS: "-Xmx3g -Dorg.gradle.jvmargs=-Xmx3g -Dkotlin.daemon.heap.size=1024m"
+
     steps:
       - uses: actions/checkout@v4
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-      - name: Install Android SDK cmdline-tools
+
+      - name: Install Android SDK cmdline-tools (fixed paths)
         run: |
+          set -eux
           ANDROID_HOME="$HOME/android-sdk"
-          mkdir -p "$ANDROID_HOME/cmdline-tools/latest"
-          curl -sL https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o cmdtools.zip
-          unzip -q cmdtools.zip -d "$ANDROID_HOME/cmdline-tools/latest"
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "build-tools;34.0.0" "platforms;android-34" >/dev/null
+          mkdir -p "$ANDROID_HOME/cmdline-tools"
+          curl -sL https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o /tmp/cmdtools.zip
+          unzip -q /tmp/cmdtools.zip -d "$ANDROID_HOME/cmdline-tools"
+          mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
           echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
           echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
           echo "$ANDROID_HOME/build-tools/34.0.0" >> $GITHUB_PATH
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "build-tools;34.0.0" "platforms;android-34" >/dev/null
+
       - name: Set up Node 20
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
+
       - name: Install deps
         run: |
           if [ -f package-lock.json ]; then npm ci --legacy-peer-deps; else npm i --legacy-peer-deps; fi
+
       - name: Expo prebuild (create/clean android)
         run: |
           npx expo --version || npm i -D expo
@@ -42,16 +52,20 @@ jobs:
           else
             npx expo prebuild --platform android --no-install --clean || true
           fi
+
       - name: Build Debug (installierbar)
         run: |
           cd android
           chmod +x ./gradlew || true
           ./gradlew --no-daemon assembleDebug -x lint -x test
+
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
           name: apk-debug
           path: android/app/build/outputs/apk/debug/*.apk
+
+      # ==== Optional: signierte Release-APK, wenn Secrets gesetzt ====
       - name: Configure Release signing (optional)
         if: ${{ secrets.ANDROID_KEYSTORE_B64 != '' }}
         run: |
@@ -76,11 +90,13 @@ PROPS
             signingConfig signingConfigs.release;\
         }\
     }/' app/build.gradle || true
+
       - name: Build Release (optional)
         if: ${{ secrets.ANDROID_KEYSTORE_B64 != '' }}
         run: |
           cd android
           ./gradlew --no-daemon assembleRelease -x lint -x test
+
       - name: Upload Release APK (optional)
         if: ${{ secrets.ANDROID_KEYSTORE_B64 != '' }}
         uses: actions/upload-artifact@v4
