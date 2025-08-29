@@ -16,10 +16,21 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Install deps
+      - name: Install deps (auto)
         run: |
-          npm i --legacy-peer-deps
-
+          node -v || true
+          npm -v || true
+          if command -v corepack >/dev/null 2>&1; then corepack enable || true; fi
+          if [ -f pnpm-lock.yaml ]; then
+            (corepack prepare pnpm@8 --activate || npm i -g pnpm) && pnpm install --no-frozen-lockfile
+          elif [ -f yarn.lock ]; then
+            corepack prepare yarn@4 --activate || true
+            (yarn install --no-immutable || yarn install)
+          elif [ -f package-lock.json ]; then
+            (npm ci --legacy-peer-deps || npm i --legacy-peer-deps)
+          else
+            npm i --legacy-peer-deps
+          fi
       - name: Set up Android SDK (API 34)
         uses: android-actions/setup-android@v3
         with:
