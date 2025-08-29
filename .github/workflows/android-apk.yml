@@ -26,3 +26,13 @@ jobs:
           api-level: 34
           components: build-tools;34.0.0
 
+
+      - name: Upload APKs (any module/variant)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: apks
+          path: |
+            android/app/build/outputs/**/*.apk
+            android/**/outputs/**/*.apk
+          if-no-files-found: warn
