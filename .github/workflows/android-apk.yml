@@ -4,11 +4,18 @@ on: { push: {}, workflow_dispatch: {} }
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
     env:
       CI: "true"
       _JAVA_OPTIONS: "-Xmx3g -XX:+UseParallelGC"
-      GRADLE_OPTS: "-Xmx3g -Dorg.gradle.jvmargs=-Xmx3g -Dkotlin.daemon.heap.size=1024m -Dorg.gradle.workers.max=2"
+      GRADLE_OPTS: >
+        -Xmx3g
+        -Dorg.gradle.jvmargs=-Xmx3g
+        -Dkotlin.daemon.heap.size=1024m
+        -Dorg.gradle.parallel=false
+        -Dorg.gradle.daemon=false
+        -Dorg.gradle.workers.max=2
+        -Dorg.gradle.logging.stacktrace=all
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
@@ -23,11 +30,10 @@ jobs:
           key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
           restore-keys: gradle-${{ runner.os }}-
 
-      - name: Cache Node Modules
+      - name: Cache node_modules
         uses: actions/cache@v4
         with:
-          path: |
-            node_modules
+          path: node_modules
           key: node-${{ runner.os }}-${{ hashFiles('**/package-lock.json', '**/pnpm-lock.yaml', '**/yarn.lock') }}
           restore-keys: node-${{ runner.os }}-
 
@@ -55,7 +61,7 @@ jobs:
           npm config set legacy-peer-deps true
           npm config set fetch-retry-maxtimeout 120000
           npm config set fetch-retry-mintimeout 20000
-          npm config set fetch-retries 5
+          npm config set fetch-retries 6
           npm -v && node -v
 
       - name: Install JS deps (robust)
@@ -81,13 +87,21 @@ jobs:
           ls -la android/gradlew || exit 1
           sed -n '1,200p' android/settings.gradle || true
 
+      # Warmup: holt Dependencies vorab, damit assemble weniger hängt
+      - name: Gradle warmup (:app:dependencies)
+        timeout-minutes: 10
+        working-directory: android
+        run: |
+          chmod +x ./gradlew || true
+          timeout -k 2m 10m ./gradlew :app:dependencies --no-daemon --warning-mode all --stacktrace || true
+
       - name: Gradle tasks (liste)
         timeout-minutes: 5
         working-directory: android
         run: |
-          chmod +x ./gradlew || true
           ./gradlew tasks --all --no-daemon --warning-mode all | tee ../gradle-tasks.txt || true
 
+      # Build separat, mit hartem Timeout (liefert Logs auch bei Hänger)
       - name: Build APK (debug)
         timeout-minutes: 25
         working-directory: android
@@ -95,8 +109,9 @@ jobs:
           chmod +x ./gradlew || true
           ./gradlew --version || true
           ./gradlew clean --no-daemon || true
-          ./gradlew assembleDebug -x lint --stacktrace --no-daemon --warning-mode all | tee ../gradle-build.log \
-            || ./gradlew :app:assembleDebug -x lint --stacktrace --no-daemon --warning-mode all | tee -a ../gradle-build.log
+          # harter Timeout + ausführliches Logging
+          timeout -k 2m 22m ./gradlew assembleDebug -x lint --info --stacktrace --no-daemon --warning-mode all | tee ../gradle-build.log \
+            || timeout -k 2m 22m ./gradlew :app:assembleDebug -x lint --info --stacktrace --no-daemon --warning-mode all | tee -a ../gradle-build.log || true
           echo "Outputs:"; find app/build/outputs -type f -maxdepth 4 -print || true
           cp -r app/build/outputs ../_outputs 2>/dev/null || true
 
