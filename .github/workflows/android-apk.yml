@@ -1,5 +1,6 @@
 name: Android Debug APK
-on: [workflow_dispatch, push]
+on: { push: {}, workflow_dispatch: {} }
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -9,21 +10,34 @@ jobs:
       GRADLE_OPTS: "-Xmx3g -Dorg.gradle.jvmargs=-Xmx3g -Dkotlin.daemon.heap.size=1024m"
     steps:
       - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
 
       - name: Set up Node 20
         uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
+        with: { node-version: '20' }
 
-      - name: Install deps (auto)
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+
+      - name: Set up Android SDK (API 34)
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: 34
+          build-tools: 34.0.0
+          components: platform-tools
+
+      - name: Accept Android SDK licenses
+        run: yes | sdkmanager --licenses
+
+      - name: Install JS deps (robust)
         run: |
-          node -v || true
-          npm -v || true
-          if command -v corepack >/dev/null 2>&1; then corepack enable || true; fi
           if [ -f pnpm-lock.yaml ]; then
-            (corepack prepare pnpm@8 --activate || npm i -g pnpm) && pnpm install --no-frozen-lockfile
+            corepack enable || true
+            corepack prepare pnpm@8 --activate || npm i -g pnpm
+            pnpm install --no-frozen-lockfile
           elif [ -f yarn.lock ]; then
+            corepack enable || true
             corepack prepare yarn@4 --activate || true
             (yarn install --no-immutable || yarn install)
           elif [ -f package-lock.json ]; then
@@ -31,22 +45,41 @@ jobs:
           else
             npm i --legacy-peer-deps
           fi
-      - name: Set up Android SDK (API 34)
-        uses: android-actions/setup-android@v3
-        with:
-          api-level: 34
-          components: build-tools;34.0.0
 
+      - name: Check android tree
+        run: |
+          ls -la android || exit 1
+          ls -la android/gradlew || exit 1
+          sed -n '1,200p' android/settings.gradle || true
 
-      - name: Upload Gradle log (always)
+      - name: Gradle tasks (liste)
+        working-directory: android
+        run: |
+          chmod +x ./gradlew || true
+          ./gradlew tasks --all --no-daemon --warning-mode all | tee ../gradle-tasks.txt || true
+
+      - name: Build APK (debug)
+        working-directory: android
+        run: |
+          chmod +x ./gradlew || true
+          ./gradlew --version || true
+          ./gradlew clean --no-daemon || true
+          ./gradlew assembleDebug -x lint --stacktrace --no-daemon --warning-mode all | tee ../gradle-build.log \
+            || ./gradlew :app:assembleDebug -x lint --stacktrace --no-daemon --warning-mode all | tee -a ../gradle-build.log
+          echo "Outputs:"; find app/build/outputs -type f -maxdepth 4 -print || true
+          cp -r app/build/outputs ../_outputs 2>/dev/null || true
+
+      - name: Upload Gradle info/log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gradle-log
-          path: android/gradle-build.log
+          name: gradle-info
+          path: |
+            gradle-tasks.txt
+            gradle-build.log
           if-no-files-found: ignore
 
-      - name: Upload outputs folder
+      - name: Upload outputs (all)
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -64,14 +97,4 @@ jobs:
           path: |
             android/app/build/outputs/**/*.apk
             android/**/outputs/**/*.apk
-          if-no-files-found: warn
-
-      - name: Upload Gradle info/log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gradle-info
-          path: |
-            android/gradle-tasks.txt
-            android/gradle-build.log
           if-no-files-found: warn
