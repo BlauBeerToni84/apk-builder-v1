@@ -12,7 +12,6 @@ dependencyResolutionManagement {
     mavenCentral()
   }
 }
-
 rootProject.name = "app"
 include(":app")
 
@@ -20,8 +19,10 @@ include(":app")
 def rnCliGradle = file("../node_modules/@react-native-community/cli-platform-android/native_modules.gradle")
 if (rnCliGradle.exists()) {
   apply from: rnCliGradle
-  if (this.metaClass.respondsTo(this, "applyNativeModulesSettingsGradle", Object)) {
+  try {
     applyNativeModulesSettingsGradle(settings)
+  } catch (Throwable t) {
+    println("ℹ️ applyNativeModulesSettingsGradle not available, continuing")
   }
 } else {
   println("⚠️ RN CLI Android script not found, skipping RN autolinking")
