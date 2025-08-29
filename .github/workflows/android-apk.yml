@@ -20,6 +20,13 @@ jobs:
           run: |
             npm ci --legacy-peer-deps
 
+      - name: Show Gradle/AGP/JDK
+        run: |
+          java -version || true
+          cd android
+          chmod +x ./gradlew || true
+          ./gradlew --version || true
+          ./gradlew tasks --all | head -n 80 || true
       - name: Set up Android SDK (API 34)
         uses: android-actions/setup-android@v3
         with:
@@ -43,3 +50,13 @@ jobs:
         with:
           name: apk-debug
           path: android/app/build/outputs/apk/debug/*.apk
+
+      - name: Upload build folder (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-build-folder
+          path: |
+            android/app/build/outputs/**
+            android/.gradle/**
+            android/build/**
