@@ -26,19 +26,3 @@ jobs:
           api-level: 34
           components: build-tools;34.0.0
 
-      - name: Expo prebuild (create android)
-        run: |
-          npx expo --version || npm i -D expo
-          npx expo prebuild --platform android --no-install
-
-      - name: Build Debug (installierbar)
-        run: |
-          cd android
-          chmod +x ./gradlew || true
-          ./gradlew --no-daemon assembleDebug -x lint -x test
-
-      - name: Upload Debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: apk-debug
-          path: android/app/build/outputs/apk/debug/*.apk
