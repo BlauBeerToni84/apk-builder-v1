@@ -40,32 +40,6 @@ jobs:
             npx expo prebuild --platform android --no-install || true
           fi
 
-      # === Signing optional: Repo-Secrets setzen, dann wird Release signiert ===
-      - name: Configure signing (optional)
-        if: ${{ secrets.ANDROID_KEYSTORE_B64 != '' }}
-        run: |
-          cd android
-          echo "$ANDROID_KEYSTORE_B64" | base64 -d > app/release.keystore
-          cat >> gradle.properties <<'PROPS'
-ANDROID_KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}
-ANDROID_KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}
-ANDROID_KEYSTORE_PASSWORD=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-PROPS
-          sed -i 's/android {/&\
-    signingConfigs {\
-        release {\
-            storeFile file("app\/release.keystore")\
-            storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: project.properties["ANDROID_KEYSTORE_PASSWORD"]\
-            keyAlias System.getenv("ANDROID_KEY_ALIAS") ?: project.properties["ANDROID_KEY_ALIAS"]\
-            keyPassword System.getenv("ANDROID_KEY_PASSWORD") ?: project.properties["ANDROID_KEY_PASSWORD"]\
-        }\
-    }\
-    buildTypes {\
-        release {\
-            signingConfig signingConfigs.release\
-        }\
-    }/' app/build.gradle || true
-
       - name: Gradle assembleRelease
         run: |
           cd android
