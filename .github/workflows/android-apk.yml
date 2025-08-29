@@ -16,6 +16,11 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
+      - name: Clean npm cache (safety)
+
+        run: |
+
+          npm cache clean --force || true
       - name: Install deps
 
         run: |
