@@ -16,9 +16,9 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Install deps
-        run: |
-          npm i --legacy-peer-deps
+        - name: Install deps
+          run: |
+            npm ci --legacy-peer-deps
 
       - name: Set up Android SDK (API 34)
         uses: android-actions/setup-android@v3
