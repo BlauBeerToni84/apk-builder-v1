@@ -1,5 +1,8 @@
 name: Android Debug APK
-on: [workflow_dispatch, push]
+on:
+  push:
+  workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -7,6 +10,7 @@ jobs:
       CI: "true"
       _JAVA_OPTIONS: "-Xmx3g -XX:+UseParallelGC"
       GRADLE_OPTS: "-Xmx3g -Dorg.gradle.jvmargs=-Xmx3g -Dkotlin.daemon.heap.size=1024m"
+
     steps:
       - uses: actions/checkout@v4
 
@@ -14,49 +18,48 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
 
-        - name: Install deps
-          run: |
-            npm ci --legacy-peer-deps
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
 
-      - name: Show Gradle/AGP/JDK
-        run: |
-          java -version || true
-          cd android
-          chmod +x ./gradlew || true
-          ./gradlew --version || true
-          ./gradlew tasks --all | head -n 80 || true
       - name: Set up Android SDK (API 34)
         uses: android-actions/setup-android@v3
         with:
           api-level: 34
-          components: build-tools;34.0.0
+          build-tools: 34.0.0
+          components: platform-tools
 
+      - name: Clean npm cache (safety)
+        run: |
+          npm cache clean --force || true
+
+      - name: Install deps
+        run: |
+          npm ci --legacy-peer-deps
+
+      # Nur wenn KEIN android/-Ordner im Repo liegt:
       - name: Expo prebuild (create android)
         if: ${{ !hashFiles('android/**') }}
+        env:
+          EXPO_NO_TELEMETRY: "1"
+          EXPO_DEBUG: "1"
         run: |
-          npx expo --version || npm i -D expo
-          npx expo prebuild --platform android --no-install
+          npx expo --version || npm i -D expo@53
+          npx expo install --fix || true
+          npx expo prebuild --platform android --no-install --clean
+          ls -la android || true
 
-      - name: Build Debug (installierbar)
+      - name: Build APK (debug)
+        working-directory: android
         run: |
-          cd android
           chmod +x ./gradlew || true
-          ./gradlew --no-daemon assembleDebug -x lint -x test
+          ./gradlew assembleDebug --stacktrace --no-daemon
 
-      - name: Upload Debug APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: apk-debug
-          path: android/app/build/outputs/apk/debug/*.apk
-
-      - name: Upload build folder (always)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-build-folder
-          path: |
-            android/app/build/outputs/**
-            android/.gradle/**
-            android/build/**
+          path: android/app/build/outputs/apk/debug/app-debug.apk
