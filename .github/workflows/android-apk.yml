@@ -43,7 +43,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: gradle-log
-          path: android/../gradle-build.log
+          path: android/gradle-build.log
           if-no-files-found: ignore
 
       - name: Upload outputs folder
@@ -64,4 +64,14 @@ jobs:
           path: |
             android/app/build/outputs/**/*.apk
             android/**/outputs/**/*.apk
+          if-no-files-found: warn
+
+      - name: Upload Gradle info/log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-info
+          path: |
+            android/gradle-tasks.txt
+            android/gradle-build.log
           if-no-files-found: warn
