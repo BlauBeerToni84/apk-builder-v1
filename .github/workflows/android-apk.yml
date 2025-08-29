@@ -3,49 +3,80 @@ on: [workflow_dispatch, push]
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
     env:
       CI: "true"
+      ANDROID_SDK_ROOT: ${{ runner.temp }}/android-sdk
       _JAVA_OPTIONS: "-Xmx3g -XX:+UseParallelGC"
-      GRADLE_OPTS: "-Xmx3g -Dorg.gradle.jvmargs='-Xmx3g -Dkotlin.daemon.heap.size=1024m'"
+      GRADLE_OPTS: "-Dorg.gradle.jvmargs='-Xmx3g -Dkotlin.daemon.heap.size=1024m'"
     steps:
       - uses: actions/checkout@v4
+
       - name: Print baseline
         run: |
           node -v || true
           npm -v || true
           java -version || true
           uname -a
+
       - name: Set up JDK 17 (Temurin)
         uses: actions/setup-java@v4
-        with: { distribution: temurin, java-version: '17' }
-      - name: Install Android SDK cmdline-tools (fix)
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Install Android SDK cmdline-tools (robust)
         run: |
-          set -eux
-          ANDROID_HOME="$HOME/android-sdk"
-          mkdir -p "$ANDROID_HOME/cmdline-tools"
+          set -euxo pipefail
+          SDK="$ANDROID_SDK_ROOT"
+          mkdir -p "$SDK"
           curl -sL https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o /tmp/cmdtools.zip
-          unzip -q /tmp/cmdtools.zip -d "$ANDROID_HOME"
-          mkdir -p "$ANDROID_HOME/cmdline-tools/latest"
-          mv "$ANDROID_HOME/cmdline-tools/cmdline-tools/"* "$ANDROID_HOME/cmdline-tools/latest/" || true
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "build-tools;34.0.0" "platforms;android-34" >/dev/null
-          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
-          echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
-          echo "$ANDROID_HOME/build-tools/34.0.0" >> $GITHUB_PATH
-      - uses: actions/setup-node@v4
-        with: { node-version: '20', cache: 'npm' }
+          unzip -q /tmp/cmdtools.zip -d "$SDK"
+          mkdir -p "$SDK/cmdline-tools/latest"
+          mv "$SDK/cmdline-tools/"* "$SDK/cmdline-tools/latest/" || true
+          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "build-tools;34.0.0" "platforms;android-34" >/dev/null
+          echo "$SDK/platform-tools" >> $GITHUB_PATH
+          echo "$SDK/build-tools/34.0.0" >> $GITHUB_PATH
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
       - name: Install deps
         run: |
           if [ -f package-lock.json ]; then npm ci --legacy-peer-deps; else npm i --legacy-peer-deps; fi
-      - name: Expo prebuild
+
+      - name: Expo prebuild (clean & ensure wrapper)
         run: |
           npx expo --version || npm i -D expo
-          if [ ! -d android ]; then npx expo prebuild --platform android --no-install; else npx expo prebuild --platform android --no-install --clean || true; fi
-          ls -la android || true
-      - name: Gradle assembleRelease
+          # Android-Projekt erzeugen/neuaufsetzen
+          npx expo prebuild --platform android --no-install --clean || true
+          [ -d android ] || npx expo prebuild --platform android --no-install
+          cd android
+          # Falls kein Wrapper vorhanden, erzeugen
+          [ -f gradlew ] || gradle wrapper || true
+
+      - name: Show Gradle/AGP
         run: |
           cd android
+          ./gradlew --version || true
+          grep -R "com.android.tools.build" -n . || true
+
+      - name: Gradle assembleRelease
+        run: |
+          set -euxo pipefail
+          cd android
           chmod +x ./gradlew || true
-          ./gradlew --no-daemon assembleRelease -x lint -x test
-      - uses: actions/upload-artifact@v4
-        with: { name: apk, path: android/app/build/outputs/apk/release/*.apk }
+          ./gradlew --no-daemon --stacktrace assembleRelease -x lint -x test
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: android/app/build/outputs/apk/release/*.apk
