@@ -1,6 +1,5 @@
 name: Android Debug APK
 on: { push: {}, workflow_dispatch: {} }
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -19,43 +18,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
-
-      - name: Cache Gradle
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
           key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
           restore-keys: gradle-${{ runner.os }}-
-
-      - name: Cache node_modules
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
           path: node_modules
           key: node-${{ runner.os }}-${{ hashFiles('**/package-lock.json', '**/pnpm-lock.yaml', '**/yarn.lock') }}
           restore-keys: node-${{ runner.os }}-
-
-      - name: Set up Node 20
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with: { node-version: '20' }
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '17' }
-
-      - name: Set up Android SDK stable (API 34)
-        uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v3
         with:
           components: |
             platform-tools
             platforms;android-34
             build-tools;34.0.0
-
       - name: Accept Android SDK licenses
         run: yes | sdkmanager --licenses
         timeout-minutes: 5
-
       - name: NPM robust config
         run: |
           npm config set legacy-peer-deps true
@@ -63,7 +50,6 @@ jobs:
           npm config set fetch-retry-mintimeout 20000
           npm config set fetch-retries 6
           npm -v && node -v
-
       - name: Install JS deps (robust)
         timeout-minutes: 20
         run: |
@@ -80,32 +66,22 @@ jobs:
           else
             npm i
           fi
-
       - name: Check android tree
         run: |
           ls -la android || exit 1
           ls -la android/gradlew || exit 1
-          sed -n '1,120p' android/settings.gradle || true
-
+          sed -n '1,220p' android/settings.gradle || true
       - name: Ensure Gradle 8.7 wrapper
         working-directory: android
         run: |
           chmod +x ./gradlew || true
           ./gradlew wrapper --gradle-version 8.7 --no-daemon || true
           sed -n '1,160p' gradle/wrapper/gradle-wrapper.properties || true
-
       - name: Gradle warmup (:app:dependencies)
         timeout-minutes: 8
         working-directory: android
         run: |
           timeout -k 60s 7m ./gradlew :app:dependencies --no-daemon --warning-mode all --stacktrace || true
-
-      - name: Gradle tasks (liste)
-        timeout-minutes: 4
-        working-directory: android
-        run: |
-          ./gradlew tasks --all --no-daemon --warning-mode all | tee ../gradle-tasks.txt || true
-
       - name: Build APK (debug)
         timeout-minutes: 22
         working-directory: android
@@ -113,34 +89,26 @@ jobs:
           chmod +x ./gradlew || true
           ./gradlew --version || true
           ./gradlew clean --no-daemon || true
-          timeout -k 60s 20m ./gradlew assembleDebug -x lint --info --stacktrace --no-daemon --warning-mode all | tee ../gradle-build.log \
-            || timeout -k 60s 20m ./gradlew :app:assembleDebug -x lint --info --stacktrace --no-daemon --warning-mode all | tee -a ../gradle-build.log || true
+          timeout -k 60s 20m ./gradlew assembleDebug -x lint --info --stacktrace --no-daemon --warning-mode all | tee ../gradle-build.log || true
           echo "Outputs:"; find app/build/outputs -type f -maxdepth 4 -print || true
           cp -r app/build/outputs ../_outputs 2>/dev/null || true
-
-      - name: Upload Gradle info/log
+      - uses: actions/upload-artifact@v4
         if: always()
-        uses: actions/upload-artifact@v4
         with:
           name: gradle-info
           path: |
-            gradle-tasks.txt
             gradle-build.log
           if-no-files-found: ignore
-
-      - name: Upload outputs (all)
+      - uses: actions/upload-artifact@v4
         if: always()
-        uses: actions/upload-artifact@v4
         with:
           name: outputs
           path: |
             _outputs/**
             android/**/outputs/**
           if-no-files-found: warn
-
-      - name: Upload APKs (any module/variant)
+      - uses: actions/upload-artifact@v4
         if: always()
-        uses: actions/upload-artifact@v4
         with:
           name: apks
           path: |
