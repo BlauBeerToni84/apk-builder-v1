@@ -27,6 +27,7 @@ jobs:
           components: build-tools;34.0.0
 
       - name: Expo prebuild (create android)
+        if: ${{ !hashFiles('android/**') }}
         run: |
           npx expo --version || npm i -D expo
           npx expo prebuild --platform android --no-install
