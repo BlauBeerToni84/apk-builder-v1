@@ -5,6 +5,9 @@ export default ({ config }) => ({
   icon: "./assets/icon.png",
   android: {
     package: "com.anonymous.k1w1apkbuilder",
-    adaptiveIcon: { foregroundImage: "./assets/icon.png", backgroundColor: "#FFFFFF" }
+    adaptiveIcon: {
+      foregroundImage: "./assets/icon.png",
+      backgroundColor: "#FFFFFF"
+    }
   }
 });
