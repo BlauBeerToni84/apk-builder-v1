@@ -85,6 +85,7 @@ def enableProguardInReleaseBuilds = (findProperty('android.enableProguardInRelea
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
 android {
+  compileSdk 34
     compileSdkVersion 34
     ndkVersion rootProject.ext.ndkVersion
 
