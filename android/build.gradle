@@ -1,10 +1,14 @@
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 
 buildscript {
+  dependencies { }
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24")
+  repositories { google(); mavenCentral() }
   repositories {
     google()
     mavenCentral()
   }
+  dependencies {
   dependencies {
         classpath("com.android.tools.build:gradle:8.1.4")
     classpath('com.android.tools.build:gradle')
@@ -39,10 +43,6 @@ apply plugin: "com.facebook.react.rootproject"
 allprojects {
   configurations.all {
     resolutionStrategy {
-      force "org.jetbrains.kotlin:kotlin-stdlib:1.9.24"
-      force "org.jetbrains.kotlin:kotlin-reflect:1.9.24"
-      force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.24"
-      force "org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24
     }
   }
 }
