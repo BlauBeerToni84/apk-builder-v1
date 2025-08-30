@@ -1,42 +1,18 @@
+// Groovy-DSL, keine Kotlin-DSL-Klammern!
 pluginManagement {
   repositories {
     google()
     mavenCentral()
     gradlePluginPortal()
   }
-  plugins {
-    id("com.android.application") version "8.1.4" apply false
-    id("org.jetbrains.kotlin.android") version "1.9.24" apply false
+}
+// Repos hier zentral halten (AGP 8+)
+dependencyResolutionManagement {
+  repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+  repositories {
+    google()
+    mavenCentral()
   }
 }
-
-}
-
-rootProject.name = "app"
+rootProject.name = "My App"
 include(":app")
-
-// ===== React Native autolinking (guarded) =====
-def rnCliGradle = file("../node_modules/@react-native-community/cli-platform-android/native_modules.gradle")
-if (rnCliGradle.exists()) {
-  apply from: rnCliGradle
-  try {
-    applyNativeModulesSettingsGradle(settings)
-  } catch (Throwable t) {
-    println("ℹ️ applyNativeModulesSettingsGradle not available, continuing")
-  }
-} else {
-  println("⚠️ RN CLI Android script not found, skipping RN autolinking")
-}
-
-// ===== Expo autolinking (guarded) =====
-try {
-  def expoAutolinkingScript = ["node", "--print", "require.resolve('expo/autolinking')"].execute(null, rootDir).text.trim()
-  def expoSettings = new File(expoAutolinkingScript, "android-settings.gradle")
-  if (expoSettings.exists()) {
-    apply from: expoSettings
-  } else {
-    println("ℹ️ Expo autolinking not present, skipping")
-  }
-} catch (Throwable t) {
-  println("ℹ️ Expo autolinking resolve failed, skipping")
-}
