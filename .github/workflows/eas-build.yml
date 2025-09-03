@@ -1,0 +1,46 @@
+name: EAS Android Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      easProfile:
+        description: 'EAS profile'
+        required: true
+        default: 'production'
+      androidArtifact:
+        description: 'apk|aab'
+        required: true
+        default: 'apk'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install deps
+        run: |
+          npm ci || npm i
+
+      - name: EAS build (Android)
+        run: |
+          npx eas build -p android --profile "${{ github.event.inputs.easProfile }}" --non-interactive --json > build.json
+          cat build.json
+
+      - name: Upload artifacts (build.json)
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-json
+          path: build.json
+
