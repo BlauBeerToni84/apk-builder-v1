@@ -12,6 +12,10 @@
       },
       "permissions": []
     },
-    "icon": "./assets/icon.png"
+    "icon": "./assets/icon.png",
+    "extra": {
+      "GROK_MODEL": "grok-4",
+      "OPENAI_MODEL": "gpt-4o-mini"
+    }
   }
 }
