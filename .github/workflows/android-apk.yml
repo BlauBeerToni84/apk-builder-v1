@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       EXPO_NO_TELEMETRY: 1
-      CI: '1'  # expo non-interactive
+      CI: '1'
     steps:
       - uses: actions/checkout@v4
 
@@ -28,9 +28,7 @@ jobs:
           set -e
           npm config set fund false
           npm config set audit false
-          # frisches/robustes Install
           npm install --no-optional || npm install --force
-          # auf SDK-53-kompatible Versionen pinnen
           npx --yes expo --version || true
           npx --yes expo install --fix
           npx --yes expo install react react-native
@@ -41,24 +39,32 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      # Android SDK + Lizenzen (macht sdkmanager etc. verfügbar)
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+
       - name: Accept Android SDK licenses
         run: yes | sdkmanager --licenses
 
       - name: Expo prebuild (Android)
-      - name: Generate JS bundle
-        run: |
-          mkdir -p android/app/src/main/assets
-          npx --yes react-native bundle --platform android --dev false --entry-file index.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res
         shell: bash
         run: npx --yes expo prebuild --platform android --clean
 
       - name: Ensure Gradle wrapper is executable
         run: chmod +x android/gradlew
 
-      - name: Build Debug APK via Gradle Wrapper
+      # JS-Bundle erzeugen (verhindert leere APK ohne JS)
+      - name: Generate JS bundle
+        run: |
+          mkdir -p android/app/src/main/assets
+          npx --yes react-native bundle \
+            --platform android \
+            --dev false \
+            --entry-file index.js \
+            --bundle-output android/app/src/main/assets/index.android.bundle \
+            --assets-dest android/app/src/main/res
+
+      # Release-Build (falls signing nicht gesetzt, greift debug signing, das wir vorher gepatcht hatten)
+      - name: Build Release APK via Gradle Wrapper
         working-directory: android
         env:
           ORG_GRADLE_PROJECT_org_gradle_daemon: "false"
