@@ -56,6 +56,20 @@ jobs:
       - name: Generate JS bundle
         run: |
           mkdir -p android/app/src/main/assets
+      - name: Build Release APK via Gradle Wrapper
+        working-directory: android
+        env:
+          ORG_GRADLE_PROJECT_org_gradle_daemon: "false"
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx3g"
+        run: ./gradlew --no-daemon --stacktrace assembleRelease
+
+      - name: Upload APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: apks
+          path: |
+            android/app/build/outputs/apk/release/*.apk
+            android/app/build/outputs/apk/debug/*.apk
           npx --yes react-native bundle \
             --platform android \
             --dev false \
