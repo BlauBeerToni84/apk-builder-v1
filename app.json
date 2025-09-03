@@ -22,11 +22,6 @@
         "backgroundColor": "#000000"
       }
     },
-    "plugins": [
-      [
-        "react-native-reanimated/plugin"
-      ]
-    ],
     "extra": {
       "eas": {
         "projectId": "REPLACE_WITH_EAS_PROJECT_ID"
