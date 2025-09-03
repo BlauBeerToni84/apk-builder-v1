@@ -1,4 +1,5 @@
-name: Android APK
+name: Android APK (RN/Expo)
+
 on:
   workflow_dispatch:
   push:
@@ -7,23 +8,37 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
+
+      # Node für React Native / Expo
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install JS dependencies
+        run: |
+          npm ci
+
+      # Java + Gradle
       - name: Setup JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
+
       - name: Setup Gradle 8.3
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: 8.3
-      - name: Gradle Version (android/)
-        run: gradle -p android --version
-      - name: Cache Gradle
-        uses: gradle/gradle-build-action@v3
+
       - name: Build Debug APK (android/)
-        run: gradle -p android --no-daemon --stacktrace assembleDebug
+        run: |
+          gradle -p android --no-daemon --stacktrace assembleDebug
+
       - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
