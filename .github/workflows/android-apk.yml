@@ -5,12 +5,13 @@ on:
   push:
     branches: [ recover-my-app, main ]
 
+env:
+  EXPO_NO_TELEMETRY: 1
+  CI: '1'
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      EXPO_NO_TELEMETRY: 1
-      CI: '1'
     steps:
       - uses: actions/checkout@v4
 
@@ -20,7 +21,6 @@ jobs:
           node-version: 18
 
       - name: Install JS deps + Expo Versionsabgleich
-        shell: bash
         env:
           NPM_CONFIG_LEGACY_PEER_DEPS: 'true'
         run: |
@@ -28,10 +28,8 @@ jobs:
           npm -v && node -v
           npm config set fund false
           npm config set audit false
-          # Expo wählt kompatible Versionen (kein --non-interactive nötig, CI=1 ist gesetzt)
           npx --yes expo --version || true
           npx --yes expo install --fix || true
-          # Danach Installation mit Fallbacks (kein package-lock vorhanden)
           (npm install --legacy-peer-deps --no-optional --no-audit --no-fund || npm install --force --no-audit --no-fund)
 
       - name: Setup JDK 17
@@ -47,7 +45,6 @@ jobs:
         run: yes | sdkmanager --licenses
 
       - name: Expo prebuild (Android)
-        shell: bash
         run: npx --yes expo prebuild --platform android --clean
 
       - name: Ensure Gradle wrapper is executable
@@ -56,20 +53,6 @@ jobs:
       - name: Generate JS bundle
         run: |
           mkdir -p android/app/src/main/assets
-      - name: Build Release APK via Gradle Wrapper
-        working-directory: android
-        env:
-          ORG_GRADLE_PROJECT_org_gradle_daemon: "false"
-          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx3g"
-        run: ./gradlew --no-daemon --stacktrace assembleRelease
-
-      - name: Upload APKs
-        uses: actions/upload-artifact@v4
-        with:
-          name: apks
-          path: |
-            android/app/build/outputs/apk/release/*.apk
-            android/app/build/outputs/apk/debug/*.apk
           npx --yes react-native bundle \
             --platform android \
             --dev false \
