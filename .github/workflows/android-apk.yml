@@ -1,5 +1,4 @@
 name: Android APK (RN/Expo)
-
 on:
   workflow_dispatch:
   push:
@@ -19,9 +18,23 @@ jobs:
           node-version: 20
           cache: 'npm'
 
-      - name: Install JS dependencies
+      - name: Install JS dependencies (robust)
+        shell: bash
         run: |
-          npm ci
+          set -e
+          # yarn bevorzugen, falls vorhanden
+          if [ -f yarn.lock ]; then
+            corepack enable
+            # erst immutable versuchen, dann normal
+            yarn install --immutable || yarn install
+          else
+            # npm: zuerst ci (wenn lockfile da), sonst Fallback
+            if [ -f package-lock.json ]; then
+              npm ci || npm install --legacy-peer-deps
+            else
+              npm install --legacy-peer-deps
+            fi
+          fi
 
       # Java + Gradle
       - name: Setup JDK 17
