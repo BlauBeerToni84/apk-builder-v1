@@ -12,15 +12,25 @@
     },
     "android": {
       "package": "com.k1w1.builder.proplus",
-      "permissions": ["READ_MEDIA_IMAGES", "READ_MEDIA_VIDEO", "READ_MEDIA_AUDIO"],
+      "permissions": [
+        "READ_MEDIA_IMAGES",
+        "READ_MEDIA_VIDEO",
+        "READ_MEDIA_AUDIO"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#000000"
       }
     },
-    "plugins": [["react-native-reanimated/plugin"]],
+    "plugins": [
+      [
+        "react-native-reanimated/plugin"
+      ]
+    ],
     "extra": {
-      "eas": { "projectId": "REPLACE_WITH_EAS_PROJECT_ID" },
+      "eas": {
+        "projectId": "REPLACE_WITH_EAS_PROJECT_ID"
+      },
       "OPENAI_MODEL": "gpt-4o-mini",
       "GROK_MODEL": "grok-2-latest",
       "ANTHROPIC_MODEL": "claude-3-5-sonnet-latest",
@@ -29,4 +39,3 @@
     }
   }
 }
-
