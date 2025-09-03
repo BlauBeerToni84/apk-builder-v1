@@ -59,7 +59,7 @@ jobs:
         env:
           ORG_GRADLE_PROJECT_org_gradle_daemon: "false"
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx3g"
-        run: ./gradlew --no-daemon --stacktrace assembleDebug
+        run: ./gradlew --no-daemon --stacktrace assembleRelease
 
       - name: Upload APKs
         uses: actions/upload-artifact@v4
