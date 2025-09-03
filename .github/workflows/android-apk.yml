@@ -1,60 +1,57 @@
-name: Android APK (RN/Expo)
+name: Android APK (Expo)
 on:
   workflow_dispatch:
   push:
-    branches:
-      - recover-my-app
-      - main
+    branches: [ recover-my-app, main ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      EXPO_NO_TELEMETRY: 1
+      CI: false
     steps:
       - uses: actions/checkout@v4
 
-      # Node für React Native / Expo
+      # Node/PNPM/Yarn via Corepack (wir nutzen npm)
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'npm'
 
-      - name: Install JS dependencies (hardened)
+      - name: Install JS deps (robust) + Expo-versions anpassen
         shell: bash
-        env:
-          NPM_CONFIG_LEGACY_PEER_DEPS: 'true'
-          CI: 'false'
         run: |
           set -e
-          if [ -f yarn.lock ]; then
-            corepack enable
-            yarn --version || true
-            # robust gegen Engines/Netzwerk
-            yarn install --immutable || yarn install --ignore-engines || yarn install
+          npm config set fund false
+          npm config set audit false
+          if [ -f package-lock.json ]; then
+            npm ci || npm install --legacy-peer-deps || npm install --force
           else
-            npm config set fund false
-            npm config set audit false
-            if [ -f package-lock.json ]; then
-              npm ci --no-optional || npm install --no-optional || npm install --force
-            else
-              npm install --no-optional || npm install --force
-            fi
+            npm install --legacy-peer-deps || npm install --force
           fi
+          npx --yes expo --version || npx --yes expo-cli --version || true
+          # Stimmt die SDK-Matrix ab (react-native/react etc.)
+          npx --yes expo install --fix --non-interactive || npx --yes expo install --non-interactive
 
-      # JDK + Gradle
+      # JDK + Gradle (nur für prebuild nachher nötig)
       - name: Setup JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
-      - name: Setup Gradle 8.3
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: 8.3
+      - name: Expo prebuild (Android)
+        shell: bash
+        run: |
+          set -e
+          # erzeugt/aktualisiert android/ passend zu deiner app.json/app.config.*
+          npx --yes expo prebuild --platform android --non-interactive --clean
 
-      - name: Build Debug APK (android/)
-        run: gradle -p android --no-daemon --stacktrace assembleDebug
+      - name: Build Debug APK via Gradle Wrapper
+        working-directory: android
+        run: ./gradlew --no-daemon --stacktrace assembleDebug
 
       - name: Upload APKs
         uses: actions/upload-artifact@v4
