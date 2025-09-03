@@ -1,10 +1,31 @@
+const path = require('path');
+
 let getDefaultConfig;
 try {
-  // RN ≥0.73 Empfehlung
-  ({ getDefaultConfig } = require("@react-native/metro-config"));
+  ({ getDefaultConfig } = require('@react-native/metro-config'));
 } catch (e) {
-  // Expo-Fallback
-  ({ getDefaultConfig } = require("expo/metro-config"));
+  ({ getDefaultConfig } = require('expo/metro-config'));
 }
-const config = getDefaultConfig(__dirname);
-module.exports = config;
+
+const { resolver, transformer, serializer, server, symbolicator } = getDefaultConfig(__dirname);
+
+// Standard-Resolver von Metro:
+const { resolve } = require('metro-resolver');
+
+module.exports = {
+  resolver: {
+    ...resolver,
+    // Handle "@/foo/bar" -> "<repo>/src/foo/bar"
+    resolveRequest: (context, moduleName, platform) => {
+      if (moduleName.startsWith('@/')) {
+        const mapped = path.join(__dirname, 'src', moduleName.slice(2));
+        return resolve(context, mapped, platform);
+      }
+      return resolve(context, moduleName, platform);
+    },
+  },
+  transformer,
+  serializer,
+  server,
+  symbolicator,
+};
