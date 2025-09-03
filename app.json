@@ -1,0 +1,13 @@
+{
+  "expo": {
+    "name": "K1W1 Builder",
+    "slug": "k1w1-builder",
+    "version": "1.0.0",
+    "android": {
+      "package": "com.anonymous.k1w1apkbuilder",
+      "versionCode": 1,
+      "adaptiveIcon": { "foregroundImage": "./assets/icon.png", "backgroundColor": "#121212" },
+      "permissions": []
+    }
+  }
+}
