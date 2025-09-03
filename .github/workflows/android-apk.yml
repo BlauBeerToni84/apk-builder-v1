@@ -28,7 +28,9 @@ jobs:
           set -e
           npm config set fund false
           npm config set audit false
+          # frisches/robustes Install
           npm install --no-optional || npm install --force
+          # auf SDK-53-kompatible Versionen pinnen
           npx --yes expo --version || true
           npx --yes expo install --fix
           npx --yes expo install react react-native
@@ -39,12 +41,24 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      # Android SDK + Lizenzen (macht sdkmanager etc. verfügbar)
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Accept Android SDK licenses
+        run: yes | sdkmanager --licenses
+
       - name: Expo prebuild (Android)
         shell: bash
         run: npx --yes expo prebuild --platform android --clean
 
+      - name: Ensure Gradle wrapper is executable
+        run: chmod +x android/gradlew
+
       - name: Build Debug APK via Gradle Wrapper
         working-directory: android
+        env:
+          ORG_GRADLE_PROJECT_org_gradle_daemon: "false"
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx3g"
         run: ./gradlew --no-daemon --stacktrace assembleDebug
 
       - name: Upload APKs
