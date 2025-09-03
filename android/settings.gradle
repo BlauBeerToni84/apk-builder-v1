@@ -1,16 +1,17 @@
 pluginManagement {
   repositories {
-    google()
-    mavenCentral()
     gradlePluginPortal()
+    mavenCentral()
+    google()
   }
 }
 dependencyResolutionManagement {
-  repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+  repositoriesMode.set(RepositoriesMode.PREFER_PROJECT)
   repositories {
-    google()
     mavenCentral()
+    google()
   }
 }
 rootProject.name = "apk-builder"
 include(":app")
+includeBuild("../node_modules/react-native-gradle-plugin")
