@@ -19,22 +19,25 @@ jobs:
           node-version: 20
           cache: 'npm'
 
-      - name: Install JS dependencies (robust)
+      - name: Install JS dependencies (hardened)
         shell: bash
+        env:
+          NPM_CONFIG_LEGACY_PEER_DEPS: 'true'
+          CI: 'false'
         run: |
           set -e
           if [ -f yarn.lock ]; then
             corepack enable
             yarn --version || true
-            yarn install --immutable || yarn install
+            # robust gegen Engines/Netzwerk
+            yarn install --immutable || yarn install --ignore-engines || yarn install
           else
-            # npm stabilisieren
             npm config set fund false
             npm config set audit false
             if [ -f package-lock.json ]; then
-              npm ci || npm install --legacy-peer-deps || npm install --force
+              npm ci --no-optional || npm install --no-optional || npm install --force
             else
-              npm install --legacy-peer-deps || npm install --force
+              npm install --no-optional || npm install --force
             fi
           fi
 
