@@ -1,20 +1,16 @@
-/** Guarded Babel config for Expo + Reanimated */
+/** Babel: Alias @ -> ./src + (optional) Reanimated zuletzt */
 module.exports = function (api) {
   api.cache(true);
-
-  const plugins = [];
-  // andere Plugins (falls nötig) VOR Reanimated pushen …
-
-  // Reanimated nur einbinden, wenn installiert:
+  const plugins = [
+    ["module-resolver", {
+      root: ["."],
+      alias: { "@": "./src" },
+      extensions: [".ts", ".tsx", ".js", ".jsx", ".json"]
+    }],
+  ];
   try {
-    require.resolve('react-native-reanimated/plugin');
-    plugins.push('react-native-reanimated/plugin'); // MUSS zuletzt stehen
-  } catch (e) {
-    // not installed – skip to avoid 'opts' undefined errors during prebuild
-  }
-
-  return {
-    presets: ['babel-preset-expo'],
-    plugins,
-  };
+    require.resolve("react-native-reanimated/plugin");
+    plugins.push("react-native-reanimated/plugin"); // immer zuletzt
+  } catch (e) {}
+  return { presets: ["babel-preset-expo"], plugins };
 };

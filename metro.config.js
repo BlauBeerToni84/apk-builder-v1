@@ -1,6 +1,10 @@
-const { getDefaultConfig } = require("expo/metro-config");
+let getDefaultConfig;
+try {
+  // RN ≥0.73 Empfehlung
+  ({ getDefaultConfig } = require("@react-native/metro-config"));
+} catch (e) {
+  // Expo-Fallback
+  ({ getDefaultConfig } = require("expo/metro-config"));
+}
 const config = getDefaultConfig(__dirname);
-config.transformer = { ...config.transformer, enableBabelRCLookup: true };
-config.resolver = { ...config.resolver, sourceExts: [...config.resolver.sourceExts, "cjs"] };
 module.exports = config;
-
