@@ -61,6 +61,9 @@ jobs:
             --assets-dest android/app/src/main/res
 
       - name: Build Release APK via Gradle Wrapper
+      - name: Gradle clean (Android)
+        working-directory: android
+        run: ./gradlew --no-daemon clean
         working-directory: android
         env:
           ORG_GRADLE_PROJECT_org_gradle_daemon: "false"
