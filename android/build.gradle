@@ -13,9 +13,18 @@ buildscript {
   dependencies {
     classpath "com.android.tools.build:gradle:8.1.4"
     classpath "com.android.tools.build:gradle:8.1.4"
-    classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.8.22"
-    classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.8.22"
+    classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24"
+    classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24"
   }
   }
 }
+}
+
+allprojects {
+  tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+    kotlinOptions {
+      jvmTarget = "17"
+      freeCompilerArgs += ["-Xjvm-default=all"]
+    }
+  }
 }

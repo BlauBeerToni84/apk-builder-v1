@@ -67,19 +67,24 @@ jobs:
             --bundle-output android/app/src/main/assets/index.android.bundle \
             --assets-dest android/app/src/main/res
 
-      - name: Gradle clean (Android)
-        working-directory: android
-        run: ./gradlew --no-daemon clean
-
-      - name: Build Release APK via Gradle Wrapper
+      # Diagnose: einzelne Kotlin-Modul-Compiles mit in-process + --info
       - name: Kotlin diag (screens)
         working-directory: android
         env:
           ORG_GRADLE_PROJECT_org_gradle_daemon: "false"
         run: ./gradlew --no-daemon -Pkotlin.compiler.execution.strategy=in-process --info :react-native-screens:compileReleaseKotlin || true
+
       - name: Kotlin diag (gesture-handler)
         working-directory: android
+        env:
+          ORG_GRADLE_PROJECT_org_gradle_daemon: "false"
         run: ./gradlew --no-daemon -Pkotlin.compiler.execution.strategy=in-process --info :react-native-gesture-handler:compileReleaseKotlin || true
+
+      - name: Gradle clean (Android)
+        working-directory: android
+        run: ./gradlew --no-daemon clean
+
+      - name: Build Release APK via Gradle Wrapper
         working-directory: android
         env:
           ORG_GRADLE_PROJECT_org_gradle_daemon: "false"
