@@ -48,12 +48,6 @@ jobs:
         run: npx --yes expo prebuild --platform android --clean
 
       - name: Ensure Gradle wrapper is executable
-
-      - name: Disable New Architecture (Fabric)
-        run: |
-          sed -i s/^newArchEnabled=.*/newArchEnabled=false/ android/gradle.properties || true
-          grep -q ^newArchEnabled= android/gradle.properties || echo newArchEnabled=false >> android/gradle.properties
-          echo "--- gradle.properties ---" && sed -n "1,120p" android/gradle.properties
         run: chmod +x android/gradlew
 
       - name: Generate JS bundle
