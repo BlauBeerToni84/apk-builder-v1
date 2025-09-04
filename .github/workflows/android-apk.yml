@@ -47,6 +47,13 @@ jobs:
       - name: Expo prebuild (Android)
         run: npx --yes expo prebuild --platform android --clean
 
+      - name: Disable New Architecture (Fabric)
+        run: |
+          sed -i 's/^newArchEnabled=.*/newArchEnabled=false/' android/gradle.properties || true
+          grep -q '^newArchEnabled=' android/gradle.properties || echo newArchEnabled=false >> android/gradle.properties
+          echo "--- gradle.properties (head) ---"
+          sed -n '1,120p' android/gradle.properties
+
       - name: Ensure Gradle wrapper is executable
         run: chmod +x android/gradlew
 
