@@ -89,6 +89,11 @@ jobs:
           ORG_GRADLE_PROJECT_org_gradle_daemon: "false"
         run: ./gradlew --no-daemon -Pkotlin.compiler.execution.strategy=in-process --info :react-native-gesture-handler:compileReleaseKotlin || true
 
+      - name: Hard Gradle purge
+        run: |
+          rm -rf ~/.gradle/caches ~/.gradle/daemon android/.gradle || true
+          if [ -d android ]; then (cd android && chmod +x gradlew || true); fi
+          if [ -d android ]; then (cd android && ./gradlew --no-daemon --stop || true); fi
       - name: Gradle clean (Android)
         working-directory: android
         run: ./gradlew --no-daemon clean
