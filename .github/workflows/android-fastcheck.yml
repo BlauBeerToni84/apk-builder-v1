@@ -1,0 +1,43 @@
+name: android-fastcheck
+on:
+  workflow_dispatch:
+jobs:
+  fastcheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '18' }
+      - name: Install deps (ohne postinstall)
+        run: |
+          npm ci --ignore-scripts || yarn --ignore-scripts || true
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*','**/gradle-wrapper.properties') }}
+      - name: Gradle Wrapper vorbereiten
+        run: |
+          chmod +x android/gradlew || true
+          ([[ -f ./gradlew ]] && chmod +x ./gradlew) || true
+      - name: Fast compile (Screens + Reanimated)
+        working-directory: android
+        run: |
+          ./gradlew --no-daemon --info             :react-native-screens:compileReleaseKotlin             :react-native-reanimated:compileReleaseJavaWithJavac
+      - name: Build-Logs sammeln
+        if: always()
+        run: |
+          mkdir -p fastlogs && cp -r ~/.gradle/caches/journal-1 fastlogs/ 2>/dev/null || true
+          (ls -la .) || true
+      - name: Artefakte hochladen
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fastcheck-logs
+          path: |
+            **/build/reports/**/*
+            **/build/outputs/**/*
+            fastlogs/**
