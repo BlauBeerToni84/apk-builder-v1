@@ -72,6 +72,14 @@ jobs:
         run: ./gradlew --no-daemon clean
 
       - name: Build Release APK via Gradle Wrapper
+      - name: Kotlin diag (screens)
+        working-directory: android
+        env:
+          ORG_GRADLE_PROJECT_org_gradle_daemon: "false"
+        run: ./gradlew --no-daemon -Pkotlin.compiler.execution.strategy=in-process --info :react-native-screens:compileReleaseKotlin || true
+      - name: Kotlin diag (gesture-handler)
+        working-directory: android
+        run: ./gradlew --no-daemon -Pkotlin.compiler.execution.strategy=in-process --info :react-native-gesture-handler:compileReleaseKotlin || true
         working-directory: android
         env:
           ORG_GRADLE_PROJECT_org_gradle_daemon: "false"
