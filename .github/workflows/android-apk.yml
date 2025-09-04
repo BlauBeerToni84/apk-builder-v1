@@ -17,6 +17,9 @@ jobs:
 
       - name: Setup Node (18)
         uses: actions/setup-node@v4
+      - name: Run ci-reset.sh
+        run: |
+          bash ci-reset.sh
         with:
           node-version: 18
 
@@ -45,6 +48,12 @@ jobs:
         run: yes | sdkmanager --licenses
 
       - name: Expo prebuild (Android)
+      - name: Patch react.minor for Reanimated
+        run: |
+          RN_MINOR=$(node -p "(()=>{const v=require(\"react-native/package.json\").version; const m=/^0\.(\d+)\./.exec(v); return m?m[1]:\"71\";})()")
+          if [ -f android/build.gradle ]; then
+            grep -q "react = \[.*minor" android/build.gradle || sed -i "1i ext { react = [ minor: ${RN_MINOR} ] }" android/build.gradle
+          fi
         run: npx --yes expo prebuild --platform android --clean
 
       - name: Disable New Architecture (Fabric)
