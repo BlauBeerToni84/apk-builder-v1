@@ -13,6 +13,16 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Run ci-reset.sh
+        run: |
+          export PIN_SCREENS=3.20.0
+          export PIN_GH=2.9.0
+          export PIN_SAFE=4.5.0
+          export PIN_REANIM=2.14.4
+          export KOTLIN_VER=1.9.24
+          export NEW_ARCH=false
+          bash ci-reset.sh
+
       - uses: actions/checkout@v4
 
       - name: Setup Node (18)
