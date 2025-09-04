@@ -47,6 +47,13 @@ jobs:
       - name: Expo prebuild (Android)
         run: npx --yes expo prebuild --platform android --clean
 
+      - name: Disable New Architecture (Fabric)
+        run: |
+          sed -i 's/^newArchEnabled=.*/newArchEnabled=false/' android/gradle.properties || true
+          grep -q '^newArchEnabled=' android/gradle.properties || echo newArchEnabled=false >> android/gradle.properties
+          echo "--- gradle.properties (head) ---"
+          sed -n '1,120p' android/gradle.properties
+
       - name: Ensure Gradle wrapper is executable
         run: chmod +x android/gradlew
 
@@ -60,10 +67,11 @@ jobs:
             --bundle-output android/app/src/main/assets/index.android.bundle \
             --assets-dest android/app/src/main/res
 
-      - name: Build Release APK via Gradle Wrapper
       - name: Gradle clean (Android)
         working-directory: android
         run: ./gradlew --no-daemon clean
+
+      - name: Build Release APK via Gradle Wrapper
         working-directory: android
         env:
           ORG_GRADLE_PROJECT_org_gradle_daemon: "false"
