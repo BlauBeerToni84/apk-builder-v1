@@ -1,4 +1,4 @@
-/** Babel: Alias @ -> ./src + (optional) Reanimated zuletzt */
+/** Babel: Alias @ -> ./src; reanimated-Plugin immer zuletzt */
 module.exports = function (api) {
   api.cache(true);
   const plugins = [
@@ -10,7 +10,7 @@ module.exports = function (api) {
   ];
   try {
     require.resolve("react-native-reanimated/plugin");
-    plugins.push("react-native-reanimated/plugin"); // immer zuletzt
-  } catch (e) {}
+    plugins.push("react-native-reanimated/plugin");
+  } catch {}
   return { presets: ["babel-preset-expo"], plugins };
 };
