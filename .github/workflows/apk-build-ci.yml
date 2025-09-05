@@ -26,14 +26,12 @@ jobs:
       - uses: android-actions/setup-android@v3
 
       - name: Restore keystore from secret
-        env:
-          B64: ${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 }}
+        shell: bash
         run: |
           set -euo pipefail
-          test -n "$B64" || { echo "No ANDROID_SIGNING_KEYSTORE_BASE64 secret"; exit 1; }
-          echo "$B64" | base64 -d > "$HOME/release.jks"
-          ls -l "$HOME/release.jks"
-
+          if [ -z '${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 }}' ]; then echo 'No ANDROID_SIGNING_KEYSTORE_BASE64 secret'; exit 1; fi
+          printf '%s' '${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 }}' | base64 -d > '$HOME/release.jks'
+          ls -l '$HOME/release.jks'
       - name: Export signing env
         run: |
           {
