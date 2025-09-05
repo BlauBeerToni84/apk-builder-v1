@@ -57,9 +57,9 @@ jobs:
               corepack prepare pnpm@latest --activate || true
               ( set -x; pnpm install --frozen-lockfile ) 2>&1 | tee -a build-logs/js-deps.log
             elif [ -f package-lock.json ]; then
-              ( set -x; npm ci --no-audit --no-fund ) 2>&1 | tee -a build-logs/js-deps.log
+              ( set -x; npm ci --legacy-peer-deps --no-audit --no-fund ) 2>&1 | tee -a build-logs/js-deps.log
             else
-              ( set -x; npm i --no-audit --no-fund ) 2>&1 | tee -a build-logs/js-deps.log
+              ( set -x; npm i --legacy-peer-deps --no-audit --no-fund ) 2>&1 | tee -a build-logs/js-deps.log
             fi
           else
             echo "Keine package.json – überspringe JS-Deps." | tee -a build-logs/js-deps.log
