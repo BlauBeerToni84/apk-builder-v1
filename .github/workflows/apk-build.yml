@@ -14,6 +14,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -22,7 +23,43 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - uses: gradle/actions/setup-gradle@v3
+
       - uses: android-actions/setup-android@v3
+
+      # Node + JS-Deps (für React Native/Expo)
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: |
+            package-lock.json
+            **/package-lock.json
+            yarn.lock
+            **/yarn.lock
+            pnpm-lock.yaml
+            **/pnpm-lock.yaml
+
+      - name: Install JS dependencies
+        run: |
+          if [ -f package.json ]; then
+            set -e
+            corepack enable || true
+            if [ -f yarn.lock ]; then
+              corepack prepare yarn@stable --activate || true
+              yarn install --frozen-lockfile
+            elif [ -f pnpm-lock.yaml ]; then
+              corepack prepare pnpm@latest --activate || true
+              pnpm install --frozen-lockfile
+            elif [ -f package-lock.json ]; then
+              npm ci
+            else
+              npm i
+            fi
+          else
+            echo "Keine package.json im Repo – überspringe JS-Deps."
+          fi
 
       - name: Restore keystore from secret
         if: ${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 !=  }}
@@ -47,15 +84,25 @@ jobs:
       - name: Build (assembleRelease)
         run: |
           set -e
+          LOGDIR="$PWD/build-logs"; mkdir -p "$LOGDIR"
           if [ -x ./gradlew ]; then
             chmod +x ./gradlew
-            ./gradlew --no-daemon assembleRelease
+            ./gradlew --no-daemon assembleRelease --stacktrace --console=plain 2>&1 | tee "$LOGDIR/gradle-build.log"
           elif [ -x ./android/gradlew ]; then
             chmod +x ./android/gradlew
-            (cd android && ./gradlew --no-daemon assembleRelease)
+            (cd android && ./gradlew --no-daemon assembleRelease --stacktrace --console=plain) 2>&1 | tee "$LOGDIR/gradle-build.log"
           else
             echo "Gradle wrapper nicht gefunden"; exit 1
           fi
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-logs
+          path: build-logs/*.log
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Upload artifact (android-apk)
         uses: actions/upload-artifact@v4
