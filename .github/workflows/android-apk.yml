@@ -92,11 +92,16 @@ jobs:
         run: ./gradlew --no-daemon clean
 
       - name: Build Release APK via Gradle Wrapper
+      - name: Verbose compile RNGH
+        working-directory: android
+        env:
+          ORG_GRADLE_PROJECT_org_gradle_daemon: "false"
+        run: ./gradlew --no-daemon -Pkotlin.compiler.execution.strategy=in-process --stacktrace --info :react-native-gesture-handler:compileReleaseKotlin
         working-directory: android
         env:
           ORG_GRADLE_PROJECT_org_gradle_daemon: "false"
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx3g"
-        run: ./gradlew --no-daemon --stacktrace assembleRelease
+        run: ./gradlew --no-daemon --stacktrace --stacktrace --info assembleRelease
 
       - name: Upload APKs
         uses: actions/upload-artifact@v4
