@@ -4,8 +4,8 @@ on:
     inputs:
       create_release:
         description: "Release erstellen und APK anhängen?"
-        type: boolean
-        default: false
+
+        default: "false"
 
 jobs:
   build:
