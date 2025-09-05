@@ -30,7 +30,9 @@ jobs:
         run: |
           set -euo pipefail
           test -n '${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 }}' || { echo 'No ANDROID_SIGNING_KEYSTORE_BASE64 secret'; exit 1; }
-          printf '%s' '${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 }}' | base64 -d > "$HOME/release.jks"
+          base64 -d > "$HOME/release.jks" <<'B64'
+${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 }}
+B64
           ls -l "$HOME/release.jks"
       - name: Export signing env
         shell: bash
