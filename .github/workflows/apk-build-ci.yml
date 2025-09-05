@@ -29,9 +29,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ -z '${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 }}' ]; then echo 'No ANDROID_SIGNING_KEYSTORE_BASE64 secret'; exit 1; fi
-          printf '%s' '${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 }}' | base64 -d > '$HOME/release.jks'
-          ls -l '$HOME/release.jks'
+          test -n '${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 }}' || { echo 'No ANDROID_SIGNING_KEYSTORE_BASE64 secret'; exit 1; }
+          printf '%s' '${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 }}' | base64 -d > "$HOME/release.jks"
+          ls -l "$HOME/release.jks"
       - name: Export signing env
         run: |
           {
