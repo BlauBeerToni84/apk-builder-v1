@@ -52,7 +52,6 @@ jobs:
           sed -i "1i ext { react = [ minor: ${RN_MINOR} ] }" android/build.gradle
           echo "ext.react.minor=${RN_MINOR} gesetzt"
           head -n 10 android/build.gradle || true
-        run: npx --yes expo prebuild --platform android --clean
 
       - name: Disable New Architecture (Fabric)
         run: |
