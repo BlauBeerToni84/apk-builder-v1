@@ -15,6 +15,20 @@ android {
     versionName "1.0"
   }
 
+  signingConfigs {
+    release {
+      def props = new Properties()
+      def f = new File(System.properties["user.home"], ".gradle/gradle.properties")
+      if (f.exists()) { props.load(new FileInputStream(f)) }
+      if (props["MY_SIGNING_STORE_FILE"]) {
+        storeFile file(props["MY_SIGNING_STORE_FILE"])
+        storePassword props["MY_SIGNING_STORE_PASSWORD"]
+        keyAlias props["MY_SIGNING_KEY_ALIAS"]
+        keyPassword props["MY_SIGNING_KEY_PASSWORD"]
+      }
+    }
+  }
+
   buildTypes {
     debug { debuggable true }
     release {
