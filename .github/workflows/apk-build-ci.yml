@@ -33,13 +33,14 @@ jobs:
           printf '%s' '${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 }}' | base64 -d > "$HOME/release.jks"
           ls -l "$HOME/release.jks"
       - name: Export signing env
+        shell: bash
         run: |
           {
+            echo "ANDROID_SIGNING_STORE_FILE=$HOME/release.jks";
             echo "ANDROID_SIGNING_STORE_PASSWORD=${{ secrets.ANDROID_SIGNING_STORE_PASSWORD }}";
             echo "ANDROID_SIGNING_KEY_ALIAS=${{ secrets.ANDROID_SIGNING_KEY_ALIAS }}";
             echo "ANDROID_SIGNING_KEY_PASSWORD=${{ secrets.ANDROID_SIGNING_KEY_PASSWORD }}";
           } >> "$GITHUB_ENV"
-
       - name: Ensure gradlew executable
         run: |
           if [ -f android/gradlew ]; then chmod +x android/gradlew; fi
