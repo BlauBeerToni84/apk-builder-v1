@@ -27,6 +27,9 @@ jobs:
 
       - uses: android-actions/setup-android@v3
 
+      - name: Prepare log dir
+        run: mkdir -p build-logs
+
       # Node + JS-Deps (für RN/Expo)
       - uses: actions/setup-node@v4
         with:
@@ -35,23 +38,31 @@ jobs:
 
       - name: Install JS dependencies (auto-detect)
         shell: bash
+        env:
+          CI: "true"
         run: |
+          set -e
+          echo "== node/npm versions ==" | tee -a build-logs/js-deps.log
+          node -v | tee -a build-logs/js-deps.log
+          npm -v  | tee -a build-logs/js-deps.log
+          echo "== workspace snapshot ==" | tee -a build-logs/js-deps.log
+          (ls -la; echo; ls -la android 2>/dev/null || true) | tee -a build-logs/js-deps.log
+
           if [ -f package.json ]; then
-            set -e
             corepack enable || true
             if [ -f yarn.lock ]; then
               corepack prepare yarn@stable --activate || true
-              yarn install --frozen-lockfile
+              ( set -x; yarn install --frozen-lockfile ) 2>&1 | tee -a build-logs/js-deps.log
             elif [ -f pnpm-lock.yaml ]; then
               corepack prepare pnpm@latest --activate || true
-              pnpm install --frozen-lockfile
+              ( set -x; pnpm install --frozen-lockfile ) 2>&1 | tee -a build-logs/js-deps.log
             elif [ -f package-lock.json ]; then
-              npm ci
+              ( set -x; npm ci --no-audit --no-fund ) 2>&1 | tee -a build-logs/js-deps.log
             else
-              npm i
+              ( set -x; npm i --no-audit --no-fund ) 2>&1 | tee -a build-logs/js-deps.log
             fi
           else
-            echo "Keine package.json – überspringe JS-Deps."
+            echo "Keine package.json – überspringe JS-Deps." | tee -a build-logs/js-deps.log
           fi
 
       - name: Expo prebuild (nur falls android/ fehlt)
@@ -64,7 +75,6 @@ jobs:
             echo "android/ vorhanden – überspringe Expo prebuild."
           fi
 
-      # Keystore OHNE secrets-im-if (gated in-shell)
       - name: Restore keystore from secret
         shell: bash
         env:
@@ -96,7 +106,7 @@ jobs:
         shell: bash
         run: |
           set -e
-          LOGDIR="$PWD/build-logs"; mkdir -p "$LOGDIR"
+          LOGDIR="$PWD/build-logs"
           if [ -x ./gradlew ]; then
             chmod +x ./gradlew
             ./gradlew --no-daemon assembleRelease --stacktrace --console=plain 2>&1 | tee "$LOGDIR/gradle-build.log"
@@ -104,14 +114,15 @@ jobs:
             chmod +x ./android/gradlew
             (cd android && ./gradlew --no-daemon assembleRelease --stacktrace --console=plain) 2>&1 | tee "$LOGDIR/gradle-build.log"
           else
-            echo "Gradle wrapper nicht gefunden"; exit 1
+            echo "Gradle wrapper nicht gefunden" | tee -a "$LOGDIR/gradle-build.log"
+            exit 1
           fi
 
       - name: Upload build logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gradle-logs
+          name: ci-logs
           path: build-logs/*.log
           if-no-files-found: warn
           retention-days: 7
