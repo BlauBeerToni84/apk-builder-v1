@@ -136,7 +136,6 @@ jobs:
           set -eux
           cd "${{ env.PROJECT_DIR }}"
           FOUND="$(find "$PWD" -type f -name "*.apk" | tr '\n' ' ')"
-          echo "found=$FOUND"
           echo "apk_list=$FOUND" >> $GITHUB_OUTPUT
 
       - name: APK signieren (falls Secrets vorhanden)
