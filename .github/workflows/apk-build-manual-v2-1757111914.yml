@@ -1,0 +1,62 @@
+name: APK Build Manual v2
+on:
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: Create GitHub release (true/false)
+        required: false
+        default: 'true'
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v3
+      - uses: android-actions/setup-android@v3
+
+      - name: Restore keystore from secret
+        if: ${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 -di > "$HOME/release.jks" <<'B64'
+${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 }}
+B64
+          install -m 600 "$HOME/release.jks" "$HOME/release.jks"
+          ls -l "$HOME/release.jks"
+
+      - name: Export signing env
+        if: ${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 != '' }}
+        shell: bash
+        run: |
+          {
+            echo "ANDROID_SIGNING_STORE_FILE=$HOME/release.jks";
+            echo "ANDROID_SIGNING_STORE_PASSWORD=${{ secrets.ANDROID_SIGNING_STORE_PASSWORD }}";
+            echo "ANDROID_SIGNING_KEY_ALIAS=${{ secrets.ANDROID_SIGNING_KEY_ALIAS }}";
+            echo "ANDROID_SIGNING_KEY_PASSWORD=${{ secrets.ANDROID_SIGNING_KEY_PASSWORD }}";
+          } >> "$GITHUB_ENV"
+
+      - name: Ensure gradlew executable
+        run: |
+          if [ -f android/gradlew ]; then chmod +x android/gradlew; fi
+
+      - name: Build (assembleRelease)
+        working-directory: android
+        run: ./gradlew --console=plain --no-daemon :app:assembleRelease
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
