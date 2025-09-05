@@ -45,6 +45,13 @@ jobs:
         run: yes | sdkmanager --licenses
 
       - name: Expo prebuild (Android)
+      - name: Ensure ext.react.minor (Reanimated)
+        run: |
+          set -e
+          RN_MINOR=$(node -p "(()=>{const v=require(\"react-native/package.json\").version; const m=/^0\.(\d+)\./.exec(v); return m?m[1]:\"71\";})()")
+          sed -i "1i ext { react = [ minor: ${RN_MINOR} ] }" android/build.gradle
+          echo "ext.react.minor=${RN_MINOR} gesetzt"
+          head -n 10 android/build.gradle || true
         run: npx --yes expo prebuild --platform android --clean
 
       - name: Disable New Architecture (Fabric)
