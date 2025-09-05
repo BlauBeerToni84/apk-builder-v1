@@ -3,10 +3,9 @@ on:
   workflow_dispatch:
     inputs:
       create_release:
-        description: "Create GitHub Release with (unsigned) APK"
+        description: Create GitHub release (true/false)
         required: false
-        default: "false"
-
+        default: 'true'
 permissions:
   contents: write
 
@@ -29,11 +28,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -n '''${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 }}''' || { echo '''No ANDROID_SIGNING_KEYSTORE_BASE64 secret'''; exit 1; }
-          base64 -di > "$HOME/release.jks" <<'''B64'''
+          test -n '${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 }}' || { echo 'No ANDROID_SIGNING_KEYSTORE_BASE64 secret'; exit 1; }
+          base64 -d > "$HOME/release.jks" <<'B64'
 ${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 }}
 B64
-          install -m 600 "$HOME/release.jks" "$HOME/release.jks"
           ls -l "$HOME/release.jks"
       - name: Export signing env
         shell: bash
@@ -52,11 +50,18 @@ B64
         working-directory: android
         run: ./gradlew --console=plain --no-daemon :app:assembleRelease
 
-      - name: Upload APK artifact
+      - name: Show outputs (debug)
+        run: |
+          ls -lah android/app/build/outputs/apk/release || true
+          find android/app/build/outputs -type f -maxdepth 3 -printf "%p\n" || true
+
+      - name: Upload APK artifact (expect signed)
         uses: actions/upload-artifact@v4
         with:
           name: app-release
-          path: android/app/build/outputs/apk/release/*.apk
+          path: |
+            android/app/build/outputs/apk/release/app-release.apk
+            android/app/build/outputs/apk/release/*-release.apk
           if-no-files-found: error
 
   release:
@@ -68,8 +73,17 @@ B64
         with:
           name: app-release
           path: .
+      - name: Pick signed APK
+        id: pick
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE="$(ls -1 *-release.apk 2>/dev/null | head -n1 || true)"
+          [[ -z "$FILE" ]] && FILE="$(ls -1 app-release.apk 2>/dev/null | head -n1 || true)"
+          [[ -n "$FILE" ]] || { echo "no signed apk found"; exit 1; }
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ github.run_number }}
           name: Release v${{ github.run_number }}
-          files: "*.apk"
+          files: ${{ steps.pick.outputs.file }}
