@@ -17,9 +17,6 @@ jobs:
 
       - name: Setup Node (18)
         uses: actions/setup-node@v4
-      - name: Run ci-reset.sh
-        run: |
-          bash ci-reset.sh
         with:
           node-version: 18
 
@@ -48,25 +45,6 @@ jobs:
         run: yes | sdkmanager --licenses
 
       - name: Expo prebuild (Android)
-      - name: Ensure ext.react for Reanimated (minor)
-        run: |
-          set -e
-          RN_MINOR=$(node -p "(()=>{const v=require('react-native/package.json').version;const m=/^0\.(\d+)\./.exec(v);return m?m[1]:'71'})()")
-          FILE=android/build.gradle
-          [ -f "$FILE" ] || { echo "android/build.gradle fehlt (prebuild?)"; exit 1; }
-          if grep -q "ext\\s*{[^}]*react\\s*=" "$FILE"; then
-            sed -i "0,/ext\\s*{[^}]*react\\s*=\\s*\[/{s//ext { react = [ minor: ${RN_MINOR} , /}" "$FILE"
-            sed -i "s/minor: [0-9]\\+, *minor:/${RN_MINOR}, minor:/g" "$FILE" || true
-          else
-            sed -i "1i ext { react = [ minor: ${RN_MINOR} ] }" "$FILE"
-          fi
-          echo "ext.react.minor=${RN_MINOR} gesetzt."
-      - name: Patch react.minor for Reanimated
-        run: |
-          RN_MINOR=$(node -p "(()=>{const v=require(\"react-native/package.json\").version; const m=/^0\.(\d+)\./.exec(v); return m?m[1]:\"71\";})()")
-          if [ -f android/build.gradle ]; then
-            grep -q "react = \[.*minor" android/build.gradle || sed -i "1i ext { react = [ minor: ${RN_MINOR} ] }" android/build.gradle
-          fi
         run: npx --yes expo prebuild --platform android --clean
 
       - name: Disable New Architecture (Fabric)
@@ -102,11 +80,6 @@ jobs:
           ORG_GRADLE_PROJECT_org_gradle_daemon: "false"
         run: ./gradlew --no-daemon -Pkotlin.compiler.execution.strategy=in-process --info :react-native-gesture-handler:compileReleaseKotlin || true
 
-      - name: Hard Gradle purge
-        run: |
-          rm -rf ~/.gradle/caches ~/.gradle/daemon android/.gradle || true
-          if [ -d android ]; then (cd android && chmod +x gradlew || true); fi
-          if [ -d android ]; then (cd android && ./gradlew --no-daemon --stop || true); fi
       - name: Gradle clean (Android)
         working-directory: android
         run: ./gradlew --no-daemon clean
