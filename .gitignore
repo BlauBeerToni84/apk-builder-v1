@@ -4,3 +4,6 @@ node_modules
 setup_keys.sh
 update_gh_token.sh
 .github/workflows/android-apk.yml.bak
+*.jks
+*.b64
+release.jks
