@@ -106,6 +106,15 @@ jobs:
             echo "Keystore nicht vorhanden – überspringe Signier-Konfig."
           fi
 
+- name: Export signing env
+        env:
+          MY_SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_SIGNING_KEYSTORE_PASSWORD }}
+          MY_SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_SIGNING_KEY_ALIAS }}
+          MY_SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_SIGNING_KEY_PASSWORD }}
+        run: |
+          echo "MY_SIGNING_STORE_PASSWORD=${MY_SIGNING_STORE_PASSWORD}" >> "$GITHUB_ENV"
+          echo "MY_SIGNING_KEY_ALIAS=${MY_SIGNING_KEY_ALIAS}" >> "$GITHUB_ENV"
+          echo "MY_SIGNING_KEY_PASSWORD=${MY_SIGNING_KEY_PASSWORD}" >> "$GITHUB_ENV"
       - name: Build (assembleRelease)
         shell: bash
         run: |
