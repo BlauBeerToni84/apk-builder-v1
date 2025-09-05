@@ -48,6 +48,19 @@ jobs:
         run: yes | sdkmanager --licenses
 
       - name: Expo prebuild (Android)
+      - name: Ensure ext.react for Reanimated (minor)
+        run: |
+          set -e
+          RN_MINOR=$(node -p "(()=>{const v=require('react-native/package.json').version;const m=/^0\.(\d+)\./.exec(v);return m?m[1]:'71'})()")
+          FILE=android/build.gradle
+          [ -f "$FILE" ] || { echo "android/build.gradle fehlt (prebuild?)"; exit 1; }
+          if grep -q "ext\\s*{[^}]*react\\s*=" "$FILE"; then
+            sed -i "0,/ext\\s*{[^}]*react\\s*=\\s*\[/{s//ext { react = [ minor: ${RN_MINOR} , /}" "$FILE"
+            sed -i "s/minor: [0-9]\\+, *minor:/${RN_MINOR}, minor:/g" "$FILE" || true
+          else
+            sed -i "1i ext { react = [ minor: ${RN_MINOR} ] }" "$FILE"
+          fi
+          echo "ext.react.minor=${RN_MINOR} gesetzt."
       - name: Patch react.minor for Reanimated
         run: |
           RN_MINOR=$(node -p "(()=>{const v=require(\"react-native/package.json\").version; const m=/^0\.(\d+)\./.exec(v); return m?m[1]:\"71\";})()")
