@@ -24,7 +24,6 @@ jobs:
           java-version: "17"
 
       - uses: gradle/actions/setup-gradle@v3
-
       - uses: android-actions/setup-android@v3
 
       - name: Prepare log dir
@@ -59,7 +58,7 @@ jobs:
             elif [ -f package-lock.json ]; then
               ( set -x; npm ci --legacy-peer-deps --no-audit --no-fund ) 2>&1 | tee -a build-logs/js-deps.log
             else
-              ( set -x; npm i --legacy-peer-deps --no-audit --no-fund ) 2>&1 | tee -a build-logs/js-deps.log
+              ( set -x; npm i  --legacy-peer-deps --no-audit --no-fund ) 2>&1 | tee -a build-logs/js-deps.log
             fi
           else
             echo "Keine package.json – überspringe JS-Deps." | tee -a build-logs/js-deps.log
@@ -87,17 +86,22 @@ jobs:
             echo "Kein Keystore-Secret gesetzt – baue unsigned."
           fi
 
+      # **Fix**: Keine Here-Doc mehr; Secrets über env und echo in Datei schreiben
       - name: Configure Gradle signing (if keystore present)
         shell: bash
+        env:
+          MY_SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_SIGNING_KEYSTORE_PASSWORD }}
+          MY_SIGNING_KEY_ALIAS:      ${{ secrets.ANDROID_SIGNING_KEY_ALIAS }}
+          MY_SIGNING_KEY_PASSWORD:   ${{ secrets.ANDROID_SIGNING_KEY_PASSWORD }}
         run: |
           if [ -f "$HOME/release.jks" ]; then
             mkdir -p ~/.gradle
-            cat > ~/.gradle/gradle.properties <<EOF
-            MY_SIGNING_STORE_FILE=${HOME}/release.jks
-            MY_SIGNING_STORE_PASSWORD=${{ secrets.ANDROID_SIGNING_KEYSTORE_PASSWORD }}
-            MY_SIGNING_KEY_ALIAS=${{ secrets.ANDROID_SIGNING_KEY_ALIAS }}
-            MY_SIGNING_KEY_PASSWORD=${{ secrets.ANDROID_SIGNING_KEY_PASSWORD }}
-            EOF
+            {
+              echo "MY_SIGNING_STORE_FILE=$HOME/release.jks"
+              echo "MY_SIGNING_STORE_PASSWORD=$MY_SIGNING_STORE_PASSWORD"
+              echo "MY_SIGNING_KEY_ALIAS=$MY_SIGNING_KEY_ALIAS"
+              echo "MY_SIGNING_KEY_PASSWORD=$MY_SIGNING_KEY_PASSWORD"
+            } > ~/.gradle/gradle.properties
           else
             echo "Keystore nicht vorhanden – überspringe Signier-Konfig."
           fi
@@ -141,7 +145,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ github.run_number }}
-          name: "Build ${{ github.run_number }}"
+          name: "Build ${ { github.run_number } }"
           draft: false
           prerelease: false
           files: |
