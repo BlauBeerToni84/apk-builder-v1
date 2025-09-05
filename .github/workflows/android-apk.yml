@@ -45,6 +45,7 @@ jobs:
         run: yes | sdkmanager --licenses
 
       - name: Expo prebuild (Android)
+        run: npx --yes expo prebuild --platform android --clean
       - name: Ensure ext.react.minor (Reanimated)
         run: |
           set -e
