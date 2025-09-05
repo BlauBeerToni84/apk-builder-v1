@@ -16,20 +16,18 @@ android {
   }
 
   signingConfigs {
-    release {
-      def props = new Properties()
-      def f = new File(System.properties["user.home"], ".gradle/gradle.properties")
-      if (f.exists()) { props.load(new FileInputStream(f)) }
-      if (props["MY_SIGNING_STORE_FILE"]) {
-        storeFile file(props["MY_SIGNING_STORE_FILE"])
-        storePassword props["MY_SIGNING_STORE_PASSWORD"]
-        keyAlias props["MY_SIGNING_KEY_ALIAS"]
-        keyPassword props["MY_SIGNING_KEY_PASSWORD"]
-      }
-    }
+  release {
+    def ksFile = new File(System.properties["user.home"], "release.jks")
+    if (ksFile.exists()) {
+      storeFile ksFile
+      storePassword System.getenv("MY_SIGNING_STORE_PASSWORD") ?: ""
+      keyAlias     System.getenv("MY_SIGNING_KEY_ALIAS")      ?: ""
+      keyPassword  System.getenv("MY_SIGNING_KEY_PASSWORD")   ?: ""
+    } else { println("**WARN**: Keystore nicht gefunden – baue unsigned.") }
   }
+}
 
-  buildTypes {
+buildTypes {
     debug { debuggable true }
     release {
       minifyEnabled false
