@@ -1,4 +1,3 @@
-name: APK Build Manual
 on:
   workflow_dispatch:
     inputs:
