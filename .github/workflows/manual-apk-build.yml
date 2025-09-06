@@ -1,4 +1,4 @@
-name: Manual APK Build (push-trigger)
+name: Manual APK Build (push-trigger, debug)
 on:
   push:
     paths:
@@ -20,6 +20,16 @@ jobs:
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v3
       - uses: android-actions/setup-android@v3
+
+      - name: Debug: context & tree
+        shell: bash
+        run: |
+          set -x
+          echo "event=${GITHUB_EVENT_NAME}"
+          echo "pwd=$(pwd)"; ls -la
+          echo "android dir:"; ls -la android || true
+          echo "probe gradlew:"; find . -maxdepth 3 -name gradlew -type f -print || true
+          echo "settings/build files:"; find android -maxdepth 2 -type f \( -name "settings.gradle*" -o -name "build.gradle*" \) -print || true
 
       - name: Restore keystore from secret
         if: ${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 !=  }}
@@ -46,19 +56,27 @@ jobs:
             echo "ANDROID_SIGNING_KEY_ALIAS=$KEY_ALIAS";
             echo "ANDROID_SIGNING_KEY_PASSWORD=$KEY_PASSWORD";
           } >> "$GITHUB_ENV"
+          echo "exported signing vars"
 
       - name: Ensure gradlew executable
         shell: bash
-        run: if [ -f android/gradlew ]; then chmod +x android/gradlew; fi
+        run: |
+          if [ -f android/gradlew ]; then chmod +x android/gradlew; fi
+          if [ ! -f android/gradlew ]; then echo "❌ android/gradlew fehlt"; ls -la android || true; exit 1; fi
 
       - name: Build (assembleRelease)
         working-directory: android
         shell: bash
-        run: ./gradlew --console=plain --no-daemon :app:assembleRelease
+        run: |
+          set -euo pipefail
+          ./gradlew --console=plain --no-daemon :app:assembleRelease
 
-      - name: Upload APK artifact
+      - name: Upload outputs (always)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: app-release
-          path: android/app/build/outputs/apk/release/*.apk
-          if-no-files-found: error
+          name: build-outputs-and-logs
+          path: |
+            android/app/build/outputs/**
+            android/build/reports/**
+          if-no-files-found: warn
