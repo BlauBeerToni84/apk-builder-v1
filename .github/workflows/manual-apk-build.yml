@@ -1,4 +1,4 @@
-name: Manual APK Build (auto-detect, stable)
+name: Manual APK Build (auto-detect, hardened)
 on:
   push:
     paths: [".github/force-run-apk"]
@@ -37,36 +37,46 @@ jobs:
             echo "ANDROID_HOME=$ANDROID_SDK_ROOT"
             echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
           } >> "$GITHUB_ENV"
-          echo "$ANDROID_SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
+          echo "$ANDROID_SDK_ROOT/platform-tools"     >> "$GITHUB_PATH"
           echo "$ANDROID_SDK_ROOT/build-tools/34.0.0" >> "$GITHUB_PATH"
 
       - name: Restore keystore from secret (tolerant)
         env:
           B64: ${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 }}
         shell: bash
+        continue-on-error: true
         run: |
           set -euo pipefail
           if [ -z "${B64:-}" ]; then
             echo "No keystore secret – skip"
             exit 0
           fi
-          printf "%s" "$B64" | base64 -d > "$HOME/release.jks"
+          if ! printf "%s" "$B64" | base64 -d > "$HOME/release.jks" 2>/dev/null; then
+            echo "Keystore secret is not valid base64 – skipping signing"
+            rm -f "$HOME/release.jks"
+            exit 0
+          fi
+          if [ ! -s "$HOME/release.jks" ]; then
+            echo "Decoded keystore is empty – skipping signing"
+            rm -f "$HOME/release.jks"
+            exit 0
+          fi
           install -m 600 "$HOME/release.jks" "$HOME/release.jks"
           ls -l "$HOME/release.jks" || true
 
       - name: Export signing env (if keystore present)
         shell: bash
         run: |
-          if [ ! -f "$HOME/release.jks" ]; then
-            echo "No keystore file – skip"
-            exit 0
+          if [ -f "$HOME/release.jks" ]; then
+            {
+              echo "ANDROID_SIGNING_STORE_FILE=$HOME/release.jks"
+              echo "ANDROID_SIGNING_STORE_PASSWORD=${{ secrets.ANDROID_SIGNING_STORE_PASSWORD }}"
+              echo "ANDROID_SIGNING_KEY_ALIAS=${{ secrets.ANDROID_SIGNING_KEY_ALIAS }}"
+              echo "ANDROID_SIGNING_KEY_PASSWORD=${{ secrets.ANDROID_SIGNING_KEY_PASSWORD }}"
+            } >> "$GITHUB_ENV"
+          else
+            echo "No keystore – building unsigned APK"
           fi
-          {
-            echo "ANDROID_SIGNING_STORE_FILE=$HOME/release.jks"
-            echo "ANDROID_SIGNING_STORE_PASSWORD=${{ secrets.ANDROID_SIGNING_STORE_PASSWORD }}"
-            echo "ANDROID_SIGNING_KEY_ALIAS=${{ secrets.ANDROID_SIGNING_KEY_ALIAS }}"
-            echo "ANDROID_SIGNING_KEY_PASSWORD=${{ secrets.ANDROID_SIGNING_KEY_PASSWORD }}"
-          } >> "$GITHUB_ENV"
 
       - name: Detect Gradle wrapper
         id: gw
@@ -82,6 +92,7 @@ jobs:
           fi
           echo "gradlew=$f" >> "$GITHUB_OUTPUT"
           echo "dir=$(dirname "$f")" >> "$GITHUB_OUTPUT"
+          echo "Found gradlew at: $f"
 
       - name: Build (assembleRelease auto)
         working-directory: ${{ steps.gw.outputs.dir }}
@@ -89,7 +100,8 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x ./gradlew || true
-          ./gradlew --console=plain --no-daemon assembleRelease || ./gradlew --console=plain --no-daemon :app:assembleRelease
+          ./gradlew --console=plain --no-daemon assembleRelease || \
+          ./gradlew --console=plain --no-daemon :app:assembleRelease
 
       - name: Upload outputs
         if: always()
@@ -99,4 +111,4 @@ jobs:
           path: |
             **/build/outputs/**
             **/build/reports/**
-          if-no-files-found: warn
+          if-no-files-found: ignore
