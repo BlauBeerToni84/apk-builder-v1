@@ -1,4 +1,4 @@
-name: Manual APK Build (github-only)
+name: Manual APK Build (auto-detect)
 on:
   push:
     paths: [".github/force-run-apk"]
@@ -12,11 +12,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-  repository: ${ { secrets.TARGET_APP_REPO } }
-  ref: main
-  fetch-depth: 0
+          repository: ${{ github.repository }}
+          ref: recover-my-app
+          fetch-depth: 0
 
-      # Nur GitHub-eigene Actions; Android SDK per Shell
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+
       - name: Install Android SDK (CLI)
         shell: bash
         run: |
@@ -38,8 +40,7 @@ jobs:
           echo "$ANDROID_SDK_ROOT/build-tools/34.0.0" >> "$GITHUB_PATH"
 
       - name: Restore keystore from secret (tolerant)
-        env:
-          B64: ${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 }}
+        env: { B64: ${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 }} }
         shell: bash
         run: |
           set -euo pipefail
@@ -59,16 +60,28 @@ jobs:
             echo "ANDROID_SIGNING_KEY_PASSWORD=${{ secrets.ANDROID_SIGNING_KEY_PASSWORD }}";
           } >> "$GITHUB_ENV"
 
-      - name: Ensure gradlew executable
+      - name: Detect Gradle wrapper
+        id: gw
         shell: bash
         run: |
-          if [ -f android/gradlew ]; then chmod +x android/gradlew;
-          else echo "❌ android/gradlew fehlt"; ls -la android || true; exit 1; fi
+          set -euo pipefail
+          f="$(git ls-files | grep -E "(^|/)gradlew$" | head -n1 || true)"
+          if [ -z "${f:-}" ]; then
+            echo "❌ No gradlew found"
+            find . -maxdepth 4 -name gradlew -type f -print || true
+            exit 1
+          fi
+          echo "gradlew=$f" >> "$GITHUB_OUTPUT"
+          echo "dir=$(dirname "$f")" >> "$GITHUB_OUTPUT"
 
-      - name: Build (assembleRelease)
-        working-directory: android
+      - name: Build (assembleRelease auto)
+        working-directory: ${{ steps.gw.outputs.dir }}
         shell: bash
-        run: ./gradlew --console=plain --no-daemon :app:assembleRelease
+        run: |
+          set -euo pipefail
+          chmod +x ./gradlew || true
+          ./gradlew --console=plain --no-daemon assembleRelease || \
+          ./gradlew --console=plain --no-daemon :app:assembleRelease
 
       - name: Upload outputs
         if: always()
@@ -76,7 +89,6 @@ jobs:
         with:
           name: app-release
           path: |
-            android/app/build/outputs/**
-            android/build/reports/**
+            **/build/outputs/**
+            **/build/reports/**
           if-no-files-found: warn
-
