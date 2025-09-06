@@ -1,17 +1,17 @@
 package com.example.myapp
 
 import android.os.Bundle
-import android.widget.TextView
-import androidx.appcompat.app.AppCompatActivity
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.activity.ComponentActivity
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
-    val tv = TextView(this).apply {
-      text = "Hello from APK builder 👋"
-      textSize = 20f
-      setPadding(32, 32, 32, 32)
-    }
-    setContentView(tv)
+    val wv = WebView(this)
+    wv.settings.javaScriptEnabled = true
+    wv.webViewClient = WebViewClient()
+    wv.loadUrl("file:///android_asset/index.html")
+    setContentView(wv)
   }
 }
