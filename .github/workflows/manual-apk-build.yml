@@ -1,4 +1,4 @@
-name: Manual APK Build (hard pkgName + autolink json)
+name: Manual APK Build (manifest repair + autolink)
 on:
   push:
     paths: [".github/force-run-apk"]
@@ -94,14 +94,13 @@ jobs:
             (cd node_modules && ln -s "@react-native/gradle-plugin" "react-native-gradle-plugin") || cp -r node_modules/@react-native/gradle-plugin node_modules/react-native-gradle-plugin
           fi
 
-      # 🔧 Paketnamen sicher bestimmen & ausgeben
+      # 1) Paketnamen robust bestimmen
       - name: Detect Android packageName
         id: pkg
         shell: bash
         run: |
           set -euo pipefail
           PKG=""
-          # build.gradle(.kts)
           if [ -f android/app/build.gradle ]; then
             PKG="$(sed -n 's/^[[:space:]]*applicationId[[:space:]]*["'\'']\([^"'\''[:space:]]\+\)["'\''].*/\1/p' android/app/build.gradle | head -n1 || true)"
             [ -n "$PKG" ] || PKG="$(sed -n 's/^[[:space:]]*namespace[[:space:]]*["'\'']\([^"'\''[:space:]]\+\)["'\''].*/\1/p' android/app/build.gradle | head -n1 || true)"
@@ -110,11 +109,9 @@ jobs:
             PKG="$(sed -n 's/^[[:space:]]*applicationId[[:space:]]*=\s*"\([^"]\+\)".*/\1/p' android/app/build.gradle.kts | head -n1 || true)"
             [ -n "$PKG" ] || PKG="$(sed -n 's/^[[:space:]]*namespace[[:space:]]*=\s*"\([^"]\+\)".*/\1/p' android/app/build.gradle.kts | head -n1 || true)"
           fi
-          # Manifest
           if [ -z "$PKG" ] && [ -f android/app/src/main/AndroidManifest.xml ]; then
             PKG="$(sed -n 's/.*package="\([^"]\+\)".*/\1/p' android/app/src/main/AndroidManifest.xml | head -n1 || true)"
           fi
-          # Fallback sauber aus Repo
           if [ -z "$PKG" ]; then
             OWNER="$(echo "${GITHUB_REPOSITORY%/*}" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9' || true)"
             NAME="$(echo "${GITHUB_REPOSITORY#*/}" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9' || true)"
@@ -123,7 +120,7 @@ jobs:
           PKG="$(echo "$PKG" | sed 's/\.\././g;s/^\.*//;s/\.*$//')"
           echo "packageName=$PKG" | tee -a "$GITHUB_OUTPUT"
 
-      # 🔧 applicationId injizieren, falls komplett fehlt
+      # 2) applicationId ergänzen, falls völlig fehlt
       - name: Ensure applicationId in build.gradle
         if: ${{ hashFiles('android/app/build.gradle') != '' }}
         shell: bash
@@ -136,7 +133,74 @@ jobs:
             mv android/app/build.gradle.ci android/app/build.gradle
           fi
 
-      # 🔧 autolinking.json **immer** mit gültigem packageName schreiben
+      # 3) **Manifest validieren/reparieren** (ersetzt defektes XML durch minimales gültiges Template)
+      - name: Validate/Repair AndroidManifest.xml
+        shell: bash
+        env:
+          PKG: ${{ steps.pkg.outputs.packageName }}
+        run: |
+          set -euxo pipefail
+          MF="android/app/src/main/AndroidManifest.xml"
+          mkdir -p "$(dirname "$MF")"
+          invalid=0
+          if [ ! -f "$MF" ]; then
+            invalid=1
+          else
+            python - <<'PY' || invalid=1
+import xml.etree.ElementTree as ET
+ET.parse("android/app/src/main/AndroidManifest.xml")
+PY
+          fi
+          if [ "$invalid" -ne 0 ]; then
+            echo "Replacing invalid/missing AndroidManifest.xml"
+            cp -f "$MF" "$MF.bak" 2>/dev/null || true
+            cat > "$MF" <<EOF
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="${PKG}">
+  <application android:name=".MainApplication" android:label="@string/app_name" android:allowBackup="true" android:supportsRtl="true">
+    <activity
+      android:name=".MainActivity"
+      android:exported="true"
+      android:label="@string/app_name"
+      android:configChanges="keyboard|keyboardHidden|orientation|screenSize|uiMode"
+      android:windowSoftInputMode="adjustResize">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity>
+  </application>
+</manifest>
+EOF
+          else
+            python - "$MF" <<'PY'
+import sys, xml.etree.ElementTree as ET
+p = sys.argv[1]
+tree = ET.parse(p); root = tree.getroot()
+if root.tag.endswith('manifest'):
+    if not root.get('package'):
+        root.set('package', "${PKG}")
+    # ensure <application>
+    app = root.find('application')
+    if app is None:
+        app = ET.SubElement(root, 'application')
+    # ensure MainActivity exported when has MAIN intent
+    main = None
+    for a in app.findall('activity'):
+        name = a.get('{http://schemas.android.com/apk/res/android}name', '')
+        if name in ('.MainActivity', 'MainActivity', '${PKG}.MainActivity'):
+            main = a; break
+    if main is None:
+        main = ET.SubElement(app, 'activity')
+        main.set('{http://schemas.android.com/apk/res/android}name', '.MainActivity')
+    has_if = any(c.tag.endswith('intent-filter') for c in list(main))
+    if has_if:
+        main.set('{http://schemas.android.com/apk/res/android}exported', 'true')
+    tree.write(p, encoding='utf-8', xml_declaration=True)
+PY
+          fi
+          echo "== AndroidManifest.xml (first 120 lines) =="; sed -n '1,120p' "$MF" || true
+
+      # 4) autolinking.json **immer** mit gültigem packageName schreiben
       - name: Write autolinking.json (force)
         shell: bash
         env:
@@ -146,16 +210,19 @@ jobs:
           mkdir -p android/build/generated/autolinking
           cat > android/build/generated/autolinking/autolinking.json <<EOF
           {
-            "project": {
-              "android": {
-                "sourceDir": "android",
-                "packageName": "${PKG}"
-              }
-            },
+            "project": { "android": { "sourceDir": "android", "packageName": "${PKG}" } },
             "dependencies": []
           }
           EOF
           echo "== autolinking.json =="; cat android/build/generated/autolinking/autolinking.json
+
+      # (Optional) Manifest-Task vorwärmen (Logs, aber tolerant)
+      - name: Warm up processReleaseMainManifest (best-effort)
+        shell: bash
+        continue-on-error: true
+        run: |
+          set -euxo pipefail
+          ./gradlew --console=plain --no-daemon :app:processReleaseMainManifest || true
 
       - name: Detect Gradle wrapper
         id: gw
@@ -172,16 +239,6 @@ jobs:
           echo "dir=$(dirname "$f")" >> "$GITHUB_OUTPUT"
           echo "Found gradlew at: $f"
 
-      - name: Warm up GeneratePackageList (best-effort)
-        working-directory: ${{ steps.gw.outputs.dir }}
-        shell: bash
-        continue-on-error: true
-        run: |
-          set -euxo pipefail
-          ./gradlew --console=plain --no-daemon :app:generateAutolinkingPackageList || true
-          ls -la ./build/generated/autolinking || true
-          ls -la ../build/generated/autolinking || true
-
       - name: Build (assembleRelease auto)
         working-directory: ${{ steps.gw.outputs.dir }}
         shell: bash
@@ -191,7 +248,7 @@ jobs:
           ./gradlew --console=plain --no-daemon assembleRelease || \
           ./gradlew --console=plain --no-daemon :app:assembleRelease
 
-      - name: Upload outputs (APKs + reports + autolinking.json)
+      - name: Upload outputs (APKs + reports + manifest + autolinking.json)
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -199,5 +256,7 @@ jobs:
           path: |
             **/build/outputs/**
             **/build/reports/**
+            android/app/src/main/AndroidManifest.xml
+            android/app/src/main/AndroidManifest.xml.bak
             android/build/generated/autolinking/autolinking.json
           if-no-files-found: ignore
