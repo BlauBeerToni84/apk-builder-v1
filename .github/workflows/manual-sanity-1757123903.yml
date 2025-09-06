@@ -1,0 +1,8 @@
+name: Manual Sanity
+on:
+  workflow_dispatch:
+jobs:
+  echo:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "::notice title=Sanity::Workflow dispatch works"
