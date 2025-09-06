@@ -31,21 +31,18 @@ jobs:
         shell: bash
         run: |
           echo "event=${{ github.event_name }}"
-          test -n "${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 }}" && echo "has_keystore_b64=true" || echo "has_keystore_b64=false"
-          test -n "${{ secrets.ANDROID_SIGNING_STORE_PASSWORD }}" && echo "has_store_password=true" || echo "has_store_password=false"
-          test -n "${{ secrets.ANDROID_SIGNING_KEY_ALIAS }}" && echo "has_key_alias=true" || echo "has_key_alias=false"
-          test -n "${{ secrets.ANDROID_SIGNING_KEY_PASSWORD }}" && echo "has_key_password=true" || echo "has_key_password=false"
+          if [ -n "${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 }}" ]; then echo "has_keystore_b64=true"; else echo "has_keystore_b64=false"; fi
+          if [ -n "${{ secrets.ANDROID_SIGNING_STORE_PASSWORD }}" ]; then echo "has_store_password=true"; else echo "has_store_password=false"; fi
+          if [ -n "${{ secrets.ANDROID_SIGNING_KEY_ALIAS }}" ]; then echo "has_key_alias=true"; else echo "has_key_alias=false"; fi
+          if [ -n "${{ secrets.ANDROID_SIGNING_KEY_PASSWORD }}" ]; then echo "has_key_password=true"; else echo "has_key_password=false"; fi
 
       - name: Restore keystore from secret (robust)
         if: ${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 != '' }}
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY' > "$HOME/release.jks"
-import base64, sys
-s = """${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 }}""".strip().encode()
-sys.stdout.buffer.write(base64.b64decode(s))
-PY
+          # einzeiliges Here-String -> keine YAML-Heredoc-Fallen:
+          base64 -d > "$HOME/release.jks" <<< '${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 }}'
           install -m 600 "$HOME/release.jks" "$HOME/release.jks"
           ls -l "$HOME/release.jks" || true
           file "$HOME/release.jks" || true
@@ -63,7 +60,8 @@ PY
           echo "Exported signing env vars."
 
       - name: Ensure gradlew executable
-        run: if [ -f android/gradlew ]; then chmod +x android/gradlew; fi
+        run: |
+          if [ -f android/gradlew ]; then chmod +x android/gradlew; fi
 
       - name: Build (assembleRelease)
         working-directory: android
