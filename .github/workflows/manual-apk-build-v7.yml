@@ -97,6 +97,18 @@ jobs:
           fi
           ls -lhR release-apks || true
 
+      - name: Collect release artifacts (force)
+        run: |
+          set -euxo pipefail
+          mkdir -p release-apks
+          find . -type f -path "*/outputs/apk/release/*.apk" -exec cp {} release-apks/ \; || true
+          find . -type f -path "*/outputs/bundle/release/*.aab" -exec cp {} release-apks/ \; || true
+          if [ -z "$(ls -A release-apks)" ]; then
+            echo "⚠️ Kein Release-APK gefunden, lege Dummy an"
+            echo "NO APK BUILT" > release-apks/NO_APK.txt
+          fi
+          ls -lhR release-apks || true
+
       - name: Upload release APKs (force)
         if: always()
         uses: actions/upload-artifact@v4
