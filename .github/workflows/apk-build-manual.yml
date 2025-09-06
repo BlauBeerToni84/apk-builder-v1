@@ -6,6 +6,9 @@ on:
         description: Create GitHub release (true/false)
         required: false
         default: 'true'
+  repository_dispatch:
+    types: [manual_apk_build]
+
 permissions:
   contents: write
 
