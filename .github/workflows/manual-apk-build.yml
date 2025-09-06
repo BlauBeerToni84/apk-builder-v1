@@ -1,4 +1,4 @@
-name: Manual APK Build (auto-detect, JS deps fix)
+name: Manual APK Build (auto-detect, JS deps robust)
 on:
   push:
     paths: [".github/force-run-apk"]
@@ -78,29 +78,30 @@ jobs:
             echo "No keystore – building unsigned APK"
           fi
 
-      # 👉 Neu: Node bereitstellen
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          check-latest: false
+          cache: 'npm'
 
-      # 👉 Neu: JavaScript-Abhängigkeiten installieren (damit react-native-gradle-plugin vorhanden ist)
-      - name: Install JS deps (yarn/npm auto)
+      # 🔧 JS-Deps robust gegen Peer-Conflicts + RN Gradle Plugin Alias
+      - name: Install JS deps (robust legacy peer deps)
         shell: bash
+        env:
+          NPM_CONFIG_LEGACY_PEER_DEPS: 'true'
         run: |
           set -euxo pipefail
           if [ -f yarn.lock ]; then
             corepack enable || true
             yarn --version || true
-            # bevorzugt "immutable" (modern), fallback auf "frozen-lockfile"
-            yarn install --immutable || yarn install --frozen-lockfile
-          elif [ -f package-lock.json ]; then
-            npm ci
+            yarn install --immutable || yarn install --frozen-lockfile || yarn install --ignore-engines
           else
-            npm install
+            npm ci --no-audit --no-fund --legacy-peer-deps || npm install --no-audit --no-fund --legacy-peer-deps
           fi
-          # Sichtprüfung: existiert das RN Gradle Plugin?
-          test -d node_modules/react-native-gradle-plugin && echo "react-native-gradle-plugin OK" || { echo "⚠️ react-native-gradle-plugin fehlt – Build kann dennoch versuchen"; true; }
+          # Falls das Projekt auf alten Include-Pfad zeigt, alias anlegen:
+          if [ -d node_modules/@react-native/gradle-plugin ] && [ ! -e node_modules/react-native-gradle-plugin ]; then
+            (cd node_modules && ln -s "@react-native/gradle-plugin" "react-native-gradle-plugin") || cp -r node_modules/@react-native/gradle-plugin node_modules/react-native-gradle-plugin
+          fi
+          test -d node_modules/react-native-gradle-plugin || test -d node_modules/@react-native/gradle-plugin || echo "⚠ RN Gradle plugin nicht gefunden – Gradle versucht trotzdem."
 
       - name: Detect Gradle wrapper
         id: gw
