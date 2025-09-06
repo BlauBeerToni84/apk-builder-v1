@@ -1,4 +1,4 @@
-name: Manual APK Build (auto-detect, JS deps robust)
+name: Manual APK Build (autolink fix, robust)
 on:
   push:
     paths: [".github/force-run-apk"]
@@ -48,19 +48,13 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${B64:-}" ]; then
-            echo "No keystore secret – skip"
-            exit 0
-          fi
+            echo "No keystore secret – skip"; exit 0; fi
           if ! printf "%s" "$B64" | base64 -d > "$HOME/release.jks" 2>/dev/null; then
             echo "Keystore secret is not valid base64 – skipping signing"
-            rm -f "$HOME/release.jks"
-            exit 0
-          fi
+            rm -f "$HOME/release.jks"; exit 0; fi
           if [ ! -s "$HOME/release.jks" ]; then
             echo "Decoded keystore is empty – skipping signing"
-            rm -f "$HOME/release.jks"
-            exit 0
-          fi
+            rm -f "$HOME/release.jks"; exit 0; fi
           install -m 600 "$HOME/release.jks" "$HOME/release.jks"
           ls -l "$HOME/release.jks" || true
 
@@ -83,8 +77,7 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      # 🔧 JS-Deps robust gegen Peer-Conflicts + RN Gradle Plugin Alias
-      - name: Install JS deps (robust legacy peer deps)
+      - name: Install JS deps (robust legacy peer deps) + RN Gradle Plugin Alias
         shell: bash
         env:
           NPM_CONFIG_LEGACY_PEER_DEPS: 'true'
@@ -97,11 +90,33 @@ jobs:
           else
             npm ci --no-audit --no-fund --legacy-peer-deps || npm install --no-audit --no-fund --legacy-peer-deps
           fi
-          # Falls das Projekt auf alten Include-Pfad zeigt, alias anlegen:
+          # Alias für ältere Includes:
           if [ -d node_modules/@react-native/gradle-plugin ] && [ ! -e node_modules/react-native-gradle-plugin ]; then
             (cd node_modules && ln -s "@react-native/gradle-plugin" "react-native-gradle-plugin") || cp -r node_modules/@react-native/gradle-plugin node_modules/react-native-gradle-plugin
           fi
           test -d node_modules/react-native-gradle-plugin || test -d node_modules/@react-native/gradle-plugin || echo "⚠ RN Gradle plugin nicht gefunden – Gradle versucht trotzdem."
+
+      # 🔧 RN/Expo Autolinking: Env setzen + autolinking.json vorab generieren (best-effort)
+      - name: Prepare Autolinking (env + pre-generate json)
+        shell: bash
+        run: |
+          set -euxo pipefail
+          echo "NODE_BINARY=$(command -v node)" >> "$GITHUB_ENV"
+          echo "REACT_NATIVE_NPM_ROOT=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
+          mkdir -p android/build/generated/autolinking
+          # Versuch 1: RN CLI
+          if npx --yes react-native --version >/dev/null 2>&1; then
+            npx --yes react-native config --platform android --json > android/build/generated/autolinking/autolinking.json || true
+          fi
+          # Versuch 2: Expo Autolinking
+          if [ ! -s android/build/generated/autolinking/autolinking.json ] && npx --yes expo-modules-autolinking --help >/dev/null 2>&1; then
+            npx --yes expo-modules-autolinking list --platform android --json > android/build/generated/autolinking/autolinking.json || true
+          fi
+          # Notfalls leere, aber gültige JSON-Struktur (Build soll weiterlaufen)
+          if [ ! -s android/build/generated/autolinking/autolinking.json ]; then
+            echo '{}' > android/build/generated/autolinking/autolinking.json
+          fi
+          echo "== autolinking.json =="; head -c 400 android/build/generated/autolinking/autolinking.json || true
 
       - name: Detect Gradle wrapper
         id: gw
@@ -111,13 +126,21 @@ jobs:
           f="$(git ls-files | grep -E '(^|/)gradlew$' | head -n1 || true)"
           if [ -z "${f:-}" ]; then
             echo "❌ No gradlew found"
-            ls -la
-            find . -maxdepth 4 -name gradlew -type f -print || true
+            ls -la; find . -maxdepth 4 -name gradlew -type f -print || true
             exit 1
           fi
           echo "gradlew=$f" >> "$GITHUB_OUTPUT"
           echo "dir=$(dirname "$f")" >> "$GITHUB_OUTPUT"
           echo "Found gradlew at: $f"
+
+      - name: Warm up Autolinking task (best-effort)
+        working-directory: ${{ steps.gw.outputs.dir }}
+        shell: bash
+        continue-on-error: true
+        run: |
+          set -euxo pipefail
+          ./gradlew --console=plain --no-daemon :app:generateAutolinkingConfig || true
+          test -f ../build/generated/autolinking/autolinking.json || test -f ./build/generated/autolinking/autolinking.json || true
 
       - name: Build (assembleRelease auto)
         working-directory: ${{ steps.gw.outputs.dir }}
@@ -128,7 +151,7 @@ jobs:
           ./gradlew --console=plain --no-daemon assembleRelease || \
           ./gradlew --console=plain --no-daemon :app:assembleRelease
 
-      - name: Upload outputs
+      - name: Upload outputs (APKs + reports)
         if: always()
         uses: actions/upload-artifact@v4
         with:
