@@ -1,4 +1,4 @@
-name: Manual APK Build (auto-detect, hardened)
+name: Manual APK Build (auto-detect, JS deps fix)
 on:
   push:
     paths: [".github/force-run-apk"]
@@ -77,6 +77,30 @@ jobs:
           else
             echo "No keystore – building unsigned APK"
           fi
+
+      # 👉 Neu: Node bereitstellen
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          check-latest: false
+
+      # 👉 Neu: JavaScript-Abhängigkeiten installieren (damit react-native-gradle-plugin vorhanden ist)
+      - name: Install JS deps (yarn/npm auto)
+        shell: bash
+        run: |
+          set -euxo pipefail
+          if [ -f yarn.lock ]; then
+            corepack enable || true
+            yarn --version || true
+            # bevorzugt "immutable" (modern), fallback auf "frozen-lockfile"
+            yarn install --immutable || yarn install --frozen-lockfile
+          elif [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+          # Sichtprüfung: existiert das RN Gradle Plugin?
+          test -d node_modules/react-native-gradle-plugin && echo "react-native-gradle-plugin OK" || { echo "⚠️ react-native-gradle-plugin fehlt – Build kann dennoch versuchen"; true; }
 
       - name: Detect Gradle wrapper
         id: gw
