@@ -32,7 +32,7 @@ jobs:
           echo "settings/build files:"; find android -maxdepth 2 -type f \( -name "settings.gradle*" -o -name "build.gradle*" \) -print || true
 
       - name: Restore keystore from secret
-        if: ${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 !=  }}
+        if: ${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 }}
         env:
           B64: ${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 }}
         shell: bash
@@ -43,7 +43,7 @@ jobs:
           ls -l "$HOME/release.jks" || true
 
       - name: Export signing env
-        if: ${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 !=  }}
+        if: ${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 }}
         env:
           STORE_PASSWORD: ${{ secrets.ANDROID_SIGNING_STORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_SIGNING_KEY_ALIAS }}
