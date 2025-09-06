@@ -12,11 +12,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
+  repository: ${ { secrets.TARGET_APP_REPO } }
+  ref: main
+  fetch-depth: 0
 
       # Nur GitHub-eigene Actions; Android SDK per Shell
       - name: Install Android SDK (CLI)
@@ -81,3 +79,4 @@ jobs:
             android/app/build/outputs/**
             android/build/reports/**
           if-no-files-found: warn
+
