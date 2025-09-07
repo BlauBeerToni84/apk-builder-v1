@@ -1,9 +1,24 @@
-node_modules
-
-# Local secret helper scripts
-setup_keys.sh
-update_gh_token.sh
-.github/workflows/android-apk.yml.bak
+# K1W1 – schlankes Repo
+node_modules/
+android/
+ios/
+.expo/
+.expo-shared/
+.gradle/
+build/
+dist/
+tmp/
+*.log
+*.keystore
 *.jks
-*.b64
-release.jks
+*.aab
+*.apk
+*.ipa
+*.zip
+*.tar
+*.tgz
+*.rar
+*.7z
+*.sqlite
+*.db
+.DS_Store

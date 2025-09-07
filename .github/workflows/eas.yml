@@ -1,0 +1,22 @@
+name: EAS Build
+on:
+  workflow_dispatch:
+    inputs:
+      easProfile:
+        description: 'EAS profile'
+        required: true
+        default: 'production'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: 'npm' }
+      - uses: expo/expo-github-action@v9
+        with: { eas-version: latest, token: ${{ secrets.EXPO_TOKEN }} }
+      - run: npm install --no-audit --no-fund
+      - run: npx expo-doctor || true
+      - run: npx eas build -p android --profile ${{ github.event.inputs.easProfile }} --non-interactive --json > build.json
+      - uses: actions/upload-artifact@v4
+        with: { name: build-metadata, path: build.json }
