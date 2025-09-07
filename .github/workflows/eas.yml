@@ -15,7 +15,7 @@ jobs:
         with: { node-version: '20', cache: 'npm' }
       - uses: expo/expo-github-action@v9
         with: { eas-version: latest, token: ${{ secrets.EXPO_TOKEN }} }
-      - run: npm install --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
       - run: npx expo-doctor || true
       - run: npx eas build -p android --profile ${{ github.event.inputs.easProfile }} --non-interactive --json > build.json
       - uses: actions/upload-artifact@v4
