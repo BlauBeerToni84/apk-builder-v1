@@ -1,7 +1,6 @@
-export function importFromText(text:string):{files:{path:string,content:string}[],detectedName?:string}{
-  const files=[{path:'App.tsx',content:text}];
-  const m=text.match(/export default function\s+([A-Za-z0-9_]+)/);
-  return { files, detectedName: m ? m[1] : undefined };
+export type ImportResult = { files: { path: string; content: string }[]; detectedName?: string };
+export async function importFromText(text: string): Promise<ImportResult> {
+  const content = `/* from text */\nexport default function App(){return null}`;
+  return { files: [{ path: "App.tsx", content }], detectedName: undefined };
 }
-
-
+export default importFromText;

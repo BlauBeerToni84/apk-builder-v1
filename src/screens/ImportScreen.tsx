@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { ScrollView, Text, Button } from 'react-native-paper';
+import { ScrollView } from 'react-native';
+import { Text, Button } from 'react-native-paper';
 import * as DocumentPicker from 'expo-document-picker';
 import { importFromDocx } from '@/modules/importers/DocxImporter';
 import { importFromZip } from '@/modules/importers/ZipImporter';
