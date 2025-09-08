@@ -13,13 +13,9 @@ on:
         required: false
         default: android
         type: choice
-        options:
-          - android
-          - ios
-          - all
+        options: [android, ios, all]
   push:
-    branches:
-      - main
+    branches: [main]
 
 jobs:
   build:
@@ -32,24 +28,51 @@ jobs:
           node-version: 20
           cache: npm
 
-      - uses: expo/expo-github-action@v9
-        with:
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
-
-      - run: npm ci --no-audit --no-fund
-      - run: npx expo-doctor || true
-
-      - name: EAS Build
+      - name: Install deps
         run: |
-          PROFILE="${{ inputs.easProfile }}"
-          PLATFORM="${{ inputs.platform }}"
-          # Fallbacks für Push-Events ohne Inputs:
-          [ -z "$PROFILE" ] && PROFILE="production"
-          [ -z "$PLATFORM" ] && PLATFORM="android"
-          npx eas build -p "$PLATFORM" --profile "$PROFILE" --non-interactive --json > build.json
+          npm ci --no-audit --no-fund
+          npm i -g eas-cli@latest
 
-      - uses: actions/upload-artifact@v4
+      - name: Verify Expo auth
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          eas whoami || { echo "EXPO_TOKEN fehlt/ungültig"; exit 1; }
+
+      - name: EAS Build (wait + json)
+        id: eas
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          PROFILE: ${{ inputs.easProfile }}
+          PLATFORM: ${{ inputs.platform }}
+        run: |
+          : "${PROFILE:=production}"
+          : "${PLATFORM:=android}"
+          npx eas build -p "$PLATFORM" --profile "$PROFILE" --non-interactive --wait --json > build.json
+          cat build.json
+
+      - name: Artefakt-URL extrahieren
+        id: url
+        run: |
+          URL="$(jq -r '..|.buildUrl? // empty' build.json | head -n1)"
+          if [ -z "$URL" ] || [ "$URL" = "null" ]; then
+            echo "Keine buildUrl in build.json gefunden"; cat build.json; exit 1
+          fi
+          echo "artifact_url=$URL" >> "$GITHUB_OUTPUT"
+
+      - name: Artefakt herunterladen
+        run: |
+          mkdir -p dist
+          # Der Dateiname kommt von EAS (apk/aab/ipa). Wir nehmen den Namen aus dem Redirect.
+          FINAL_URL="$(curl -sIL "${{ steps.url.outputs.artifact_url }}" | awk '/^location:/I {print $2}' | tail -n1 | tr -d '\r')"
+          [ -z "$FINAL_URL" ] && FINAL_URL="${{ steps.url.outputs.artifact_url }}"
+          fname="app-download"
+          curl -fL "$FINAL_URL" -o "dist/$fname"
+          file "dist/$fname" || true
+          ls -lah dist
+
+      - name: Upload GitHub Artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: build-metadata
-          path: build.json
+          name: app-${{ inputs.platform || 'android' }}
+          path: dist/*
