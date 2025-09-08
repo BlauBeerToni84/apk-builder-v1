@@ -1,11 +1,9 @@
 name: EAS Build
 on:
   workflow_dispatch:
-    inputs:
-      easProfile:
-        description: 'EAS profile'
-        required: true
-        default: 'production'
+  push:
+    branches:
+      - main
 jobs:
   build:
     runs-on: ubuntu-latest
