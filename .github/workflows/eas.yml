@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       easProfile:
-        description: EAS profile name (e.g. production, preview)
+        description: EAS profile (e.g. production, preview)
         required: false
         default: production
         type: string
@@ -14,65 +14,97 @@ on:
         default: android
         type: choice
         options: [android, ios, all]
-  push:
-    branches: [main]
+
+# Verhindert Auto-Cancel durch gleichzeitige Runs
+concurrency:
+  group: eas-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          # kein cache, wir verlassen uns auf den Lockfile
 
-      - name: Install deps
+      - name: Ensure jq
         run: |
-          npm ci --no-audit --no-fund
+          if ! command -v jq >/dev/null 2>&1; then
+            sudo apt-get update -y
+            sudo apt-get install -y jq
+          fi
+
+      - name: Install deps (lock-aware)
+        run: |
+          set -e
+          if [ -f package-lock.json ]; then
+            echo "Found package-lock.json → npm ci"
+            npm ci --no-audit --no-fund
+          else
+            echo "No lockfile → npm install"
+            npm install --no-audit --no-fund
+          fi
           npm i -g eas-cli@latest
 
-      - name: Verify Expo auth
+      - name: Validate EXPO auth
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
-          eas whoami || { echo "EXPO_TOKEN fehlt/ungültig"; exit 1; }
-
-      - name: EAS Build (wait + json)
-        id: eas
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-          PROFILE: ${{ inputs.easProfile }}
-          PLATFORM: ${{ inputs.platform }}
-        run: |
-          : "${PROFILE:=production}"
-          : "${PLATFORM:=android}"
-          npx eas build -p "$PLATFORM" --profile "$PROFILE" --non-interactive --wait --json > build.json
-          cat build.json
-
-      - name: Artefakt-URL extrahieren
-        id: url
-        run: |
-          URL="$(jq -r '..|.buildUrl? // empty' build.json | head -n1)"
-          if [ -z "$URL" ] || [ "$URL" = "null" ]; then
-            echo "Keine buildUrl in build.json gefunden"; cat build.json; exit 1
+          if [ -z "${EXPO_TOKEN:-}" ]; then
+            echo "EXPO_TOKEN Secret fehlt. Repo → Settings → Secrets → Actions."
+            exit 1
           fi
-          echo "artifact_url=$URL" >> "$GITHUB_OUTPUT"
+          eas whoami
 
-      - name: Artefakt herunterladen
+      - name: Decide platforms
+        id: plan
         run: |
-          mkdir -p dist
-          # Der Dateiname kommt von EAS (apk/aab/ipa). Wir nehmen den Namen aus dem Redirect.
-          FINAL_URL="$(curl -sIL "${{ steps.url.outputs.artifact_url }}" | awk '/^location:/I {print $2}' | tail -n1 | tr -d '\r')"
-          [ -z "$FINAL_URL" ] && FINAL_URL="${{ steps.url.outputs.artifact_url }}"
-          fname="app-download"
-          curl -fL "$FINAL_URL" -o "dist/$fname"
-          file "dist/$fname" || true
-          ls -lah dist
+          PLATFORM="${{ inputs.platform }}"
+          [ -z "$PLATFORM" ] && PLATFORM="android"
+          if [ "$PLATFORM" = "all" ]; then
+            echo "matrix=android ios" >> "$GITHUB_OUTPUT"
+          else
+            echo "matrix=$PLATFORM" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Upload GitHub Artifact
+      - name: Build (EAS, wait, json)
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          PROFILE="${{ inputs.easProfile }}"
+          [ -z "${PROFILE:-}" ] && PROFILE="production"
+          mkdir -p dist
+          build_one () {
+            local PLATFORM="$1"
+            echo "::group::EAS build ($PLATFORM)"
+            npx eas build -p "$PLATFORM" --profile "$PROFILE" --non-interactive --wait --json > "build-$PLATFORM.json"
+            cat "build-$PLATFORM.json"
+            URL="$(jq -r '..|.buildUrl? // empty' "build-$PLATFORM.json" | head -n1)"
+            if [ -z "$URL" ] || [ "$URL" = "null" ]; then
+              echo "Keine buildUrl für $PLATFORM gefunden"; exit 1
+            fi
+            FINAL_URL="$(curl -sIL "$URL" | awk '/^location:/I {print $2}' | tail -n1 | tr -d "\r")"
+            [ -z "$FINAL_URL" ] && FINAL_URL="$URL"
+            # -J respektiert Content-Disposition (liefert .apk/.aab/.ipa Dateinamen)
+            curl -fL -J "$FINAL_URL" -o "dist/app-$PLATFORM.bin"
+            file "dist/app-$PLATFORM.bin" || true
+            ls -lah dist
+            echo "::endgroup::"
+          }
+          for p in ${{ steps.plan.outputs.matrix }}; do build_one "$p"; done
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: app-${{ inputs.platform || 'android' }}
-          path: dist/*
+          path: |
+            dist/**
+            build-*.json
+          if-no-files-found: error
