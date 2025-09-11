@@ -42,9 +42,7 @@ jobs:
           else
             echo "[INFO] Kein Link → init (non-interactive)…"
             if ! eas project:init --non-interactive --force --json >/tmp/eas_init.json 2>/tmp/eas_init.err; then
-              echo "[ERR] project:init failed:"
-              sed -n '1,200p' /tmp/eas_init.err || true
-              exit 1
+              echo "[ERR] project:init failed:"; sed -n '1,200p' /tmp/eas_init.err || true; exit 1
             fi
             ID="$(jq -r '.id // empty' /tmp/eas_init.json || true)"
             if [ -z "${ID:-}" ] || ! printf "%s" "$ID" | grep -Eq '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'; then
@@ -70,8 +68,7 @@ jobs:
           echo "[INFO] Starte Cloud-Build…"
           eas --version && eas whoami
           eas build -p android --profile "${{ github.event.inputs.easProfile }}" --non-interactive --wait --json > build.json
-          echo "[OK] Build-JSON:"
-          cat build.json
+          echo "[OK] Build-JSON:"; cat build.json
           if jq -e 'any(.[]; .status=="finished")' build.json >/dev/null 2>&1; then
             echo "[INFO] Lade APK/AAB herunter…"
             eas build:download -p android --latest --profile "${{ github.event.inputs.easProfile }}" --path app-release.apk || true
