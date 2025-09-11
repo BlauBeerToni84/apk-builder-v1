@@ -22,7 +22,7 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
       - run: npm ci --no-audit --no-fund
       - run: npx expo-doctor || true
-      - run: npx eas build -p android --profile ${{ github.event.inputs.easProfile }} --non-interactive --json > build.json
+      - run: eas build -p android --profile ${{ github.event.inputs.easProfile }} --non-interactive --json > build.json
       - uses: actions/upload-artifact@v4
         with:
           name: build-metadata
