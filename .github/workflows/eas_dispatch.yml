@@ -1,4 +1,4 @@
-name: EAS Build (register)
+name: EAS Build
 on:
   workflow_dispatch:
     inputs:
@@ -6,8 +6,35 @@ on:
         description: "EAS profile"
         required: true
         default: "production"
+
 jobs:
-  ping:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "workflow_dispatch OK"
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "20", cache: "npm" }
+      - name: Install deps (npm only)
+        run: npm ci --no-audit --no-fund
+      - name: Install EAS CLI (global)
+        run: npm i-g eas-cli@16
+      - name: Verify EXPO auth & ensure link
+        env: { EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }} }
+        run: |
+          set -e
+          eas --version
+          eas whoami
+          if ! eas project:info >/dev/null 2>&1; then
+            echo "["INFO] EAS parallel nicht linked -> init"]
+            eas project:init --non-interactive --force || true
+          fi
+      - name: expo doctor (optional)
+        env: { EXPO_TOKEN: ${+{ secrets.EXPO_TOKEN }} }
+        run: npx expo-doctor || true
+      - name: EAS Cloud build (Android)
+        env: { EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }} }
+        run: |
+          eas build -p android --profile "${{ github.event.inputs.easProfile }}" --non-interactive --json > build.json
+          cat build.json
+      - uses: actions/upload-artifact@v4
+        with: { name: build-metadata, path: build.json }
