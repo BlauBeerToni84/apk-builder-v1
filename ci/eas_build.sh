@@ -27,6 +27,12 @@ echo "[INFO] resolve EXPO_PROJECT_ID ..."
 ID=""
 if eas project:info --json > /tmp/info.json 2> /tmp/info.err; then
   ID="$(get_id_from_file /tmp/info.json /tmp/info.err)"
+if [ -z "${ID:-}" ]; then
+if [ -z "${ID:-}" ]; then
+  ID="$(jq -r '.expo.extra.eas.projectId // empty' app.json 2>/dev/null | head -n1 || true)"
+fi
+  ID="$(jq -r '.expo.extra.eas.projectId // empty' app.json 2>/dev/null | head -n1 || true)"
+fi
   echo "[OK] linked (project:info): ${ID:-<empty>}"
 else
   echo "[INFO] no link -> project:init (non-interactive, reads app.json)"
@@ -39,6 +45,12 @@ else
   # Nach init erneut info ziehen
   eas project:info --json > /tmp/info.json 2> /tmp/info.err || true
   ID="$(get_id_from_file /tmp/info.json /tmp/info.err)"
+if [ -z "${ID:-}" ]; then
+if [ -z "${ID:-}" ]; then
+  ID="$(jq -r '.expo.extra.eas.projectId // empty' app.json 2>/dev/null | head -n1 || true)"
+fi
+  ID="$(jq -r '.expo.extra.eas.projectId // empty' app.json 2>/dev/null | head -n1 || true)"
+fi
 fi
 
 # Wenn noch leer → Debug-Ausgaben und Abbruch
