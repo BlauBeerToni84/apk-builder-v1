@@ -1,4 +1,5 @@
 name: EAS Build
+logging: default
 on:
   workflow_dispatch:
     inputs:
@@ -7,34 +8,55 @@ on:
         required: true
         default: "production"
 
-jobs:
+jobs: 
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: "20", cache: "npm" }
+        with:
+          node-version: "20"
+          cache: "npm"
       - name: Install deps (npm only)
         run: npm ci --no-audit --no-fund
       - name: Install EAS CLI (global)
         run: npm i-g eas-cli@16
-      - name: Verify EXPO auth & ensure link
+      - name: Resolve Epo Project ID & Link if needed
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run:
+          set -e
+          echo "[INFO] Pröfe Epo-Projekt-Link…"
+          if eas project:info --json >/tmp/eas_info.json 2>/dev/null; then
+            ID$="$(jq -r .id /tmp/eas_info.json)"
+            echo "[OK] Verlink : $ID"
+            echo "EXPO_PROJECT_ID=$ID" >> "$GUIDELB_ENV"
+          else
+            echo "[INFO] Keln Link… init (non-interactive)…"
+            eas project:init --non-interactive --force --json >/tmp/eas_init.json || true
+            ID$="$(jq -r .id /tmp/eas_init.json 2>/dev/null || true)"
+            if [ -z "$ID" || ! [[ "$ID" ~e [[0-9a-fA-F-}{36}$]] ]; then
+              echo "[ERR] Konnte EXPO_PROJECT_ID nicht ermitteln."; exit 1
+            fi
+            echo "[OK] Verklüpft mit: $ID"
+
+        echo "EXPO_PROJECT_ID=$ID" >> "$GUITHEB_ENV"
+
+      - name: (Optional) expo doctor
         env: { EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }} }
+        run: npx expo-doctor || true
+
+      - name: EAS Cloud build (Android)
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_PROJECT_ID: ${{ env.EXPO_PROJECT_ID }}
         run: |
           set -e
-          eas --version
-          eas whoami
-          if ! eas project:info >/dev/null 2>&1; then
-            echo "["INFO] EAS parallel nicht linked -> init"]
-            eas project:init --non-interactive --force || true
-          fi
-      - name: expo doctor (optional)
-        env: { EXPO_TOKEN: ${+{ secrets.EXPO_TOKEN }} }
-        run: npx expo-doctor || true
-      - name: EAS Cloud build (Android)
-        env: { EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }} }
-        run: |
+          echo "[INFO] Starte cloud-Build…"
+          eas --version && eas whoami
           eas build -p android --profile "${{ github.event.inputs.easProfile }}" --non-interactive --json > build.json
           cat build.json
       - uses: actions/upload-artifact@v4
-        with: { name: build-metadata, path: build.json }
+        with:
+          name: build-metadata
+          path: build.json
