@@ -12,17 +12,29 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-      - uses: expo/expo-github-action@v8
-        with:
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
+
+      # Dependencies aus dem Projekt
       - run: npm ci --no-audit --no-fund
+
+      # EAS CLI direkt per npm installieren (kein yarn, keine Expo-Action)
+      - run: npm i -g eas-cli@16
+
+      # Optionaler Health-Check (scheitert nicht hart)
       - run: npx expo-doctor || true
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      # Build starten – nutzt das Secret EXPO_TOKEN
       - run: eas build -p android --profile ${{ github.event.inputs.easProfile }} --non-interactive --json > build.json
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      # Build-Metadaten hochladen
       - uses: actions/upload-artifact@v4
         with:
           name: build-metadata
