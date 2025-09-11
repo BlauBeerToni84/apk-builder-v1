@@ -9,11 +9,15 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on:
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }} ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
         with:
           node-version: "20"
           cache: "npm"
@@ -29,16 +33,17 @@ jobs:
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
+          set -euo pipefail
           set -e
           echo "[INFO] prüfe Expo-Link…"
           if eas project:info --json >/tmp/eas_info.json 2>/dev/null; then
-            ID="$(jq -r '.id' /tmp/eas_info.json)"
+            ID="$(jq -r '.id // empty' /tmp/eas_info.json || true)"
             echo "[OK] verlinkt: $ID"
           else
             echo "[INFO] kein Link → init (non-interactive)…"
             eas project:init --non-interactive --force --json >/tmp/eas_init.json || true
-            ID="$(jq -r '.id // empty' /tmp/eas_init.json)"
-            if [ -z "$ID" ] || ! echo "$ID" | grep -Eq '^[0-9a-fA-F-]{36}$'; then
+            ID="$(jq -r '.id // empty' /tmp/eas_init.json || true)"
+            if [ -z "${ID:-}" ] || ! printf "%s" "$ID" | grep -Eq '^[0-9a-fA-F-]{8}-[0-9a-fA-F-]{4}-[0-9a-fA-F-]{4}-[0-9a-fA-F-]{4}-[0-9a-fA-F-]{12}$'; then
               echo "[ERR] konnte EXPO_PROJECT_ID nicht ermitteln."; exit 1
             fi
             echo "[OK] verknüpft mit: $ID"
@@ -55,6 +60,7 @@ jobs:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           EXPO_PROJECT_ID: ${{ env.EXPO_PROJECT_ID }}
         run: |
+          set -euo pipefail
           set -e
           echo "[INFO] starte Cloud-Build…"
           eas --version && eas whoami
