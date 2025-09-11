@@ -1,0 +1,31 @@
+name: EAS Build
+on:
+  workflow_dispatch:
+    inputs:
+      easProfile:
+        description: "EAS profile"
+        required: true
+        default: "production"
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "20", cache: "npm" }
+      - name: Install deps
+        run: npm ci --no-audit --no-fund
+      - name: Install EAS CLI (npm global)
+        run: npm i -g eas-cli@latest
+      - name: Verify EAS auth
+        env: { EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }} }
+        run: |
+          test -n "${EXPO_TOKEN:-}" || { echo "EXPO_TOKEN Secret fehlt"; exit 1; }
+          eas whoami --token "$EXPO_TOKEN"
+      - name: EAS Cloud build (Android)
+        env: { EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }} }
+        run: |
+          eas build -p android --profile "${{ github.event.inputs.easProfile }}"             --non-interactive --json --token "$EXPO_TOKEN" > build.json
+          cat build.json
+      - uses: actions/upload-artifact@v4
+        with: { name: build-metadata, path: build.json }
