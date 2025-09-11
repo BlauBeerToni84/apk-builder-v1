@@ -1,0 +1,90 @@
+name: EAS Build Dispatch
+on:
+  workflow_dispatch:
+    inputs:
+      easProfile:
+        description: "EAS profile"
+        required: true
+        default: "production"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Install deps (npm only)
+        run: npm ci --no-audit --no-fund
+
+      - name: Install EAS CLI (global)
+        run: npm i -g eas-cli@16
+
+      - name: Resolve Expo Project ID (link if needed)
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "[INFO] Prüfe Expo-Projekt-Link…"
+          if eas project:info --json >/tmp/eas_info.json 2>/dev/null; then
+            ID="$(jq -r '.id // empty' /tmp/eas_info.json || true)"
+            echo "[OK] Verlinkt: $ID"
+          else
+            echo "[INFO] Kein Link → init (non-interactive)…"
+            if ! eas project:init --non-interactive --force --json >/tmp/eas_init.json 2>/tmp/eas_init.err; then
+              echo "[ERR] project:init failed:"; sed -n '1,200p' /tmp/eas_init.err || true; exit 1
+            fi
+            ID="$(jq -r '.id // empty' /tmp/eas_init.json || true)"
+            if [ -z "${ID:-}" ] || ! printf "%s" "$ID" | grep -Eq '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'; then
+              echo "[ERR] Konnte EXPO_PROJECT_ID nicht ermitteln."
+              echo "=== eas_init.json ==="; cat /tmp/eas_init.json || true
+              echo "=== eas_init.err ==="; sed -n '1,200p' /tmp/eas_init.err || true
+              exit 1
+            fi
+            echo "[OK] Verknüpft mit: $ID"
+          fi
+          echo "EXPO_PROJECT_ID=$ID" >> "$GITHUB_ENV"
+
+      - name: (Optional) expo doctor
+        env: { EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }} }
+        run: npx expo-doctor || true
+
+      - name: EAS Cloud build (Android, wait & download)
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_PROJECT_ID: ${{ env.EXPO_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          echo "[INFO] Starte Cloud-Build…"
+          eas --version && eas whoami
+          eas build -p android --profile "${{ github.event.inputs.easProfile }}" --non-interactive --wait --json > build.json
+          echo "[OK] Build-JSON:"; cat build.json
+          if jq -e 'any(.[]; .status=="finished")' build.json >/dev/null 2>&1; then
+            echo "[INFO] Lade APK/AAB herunter…"
+            eas build:download -p android --latest --profile "${{ github.event.inputs.easProfile }}" --path app-release.apk || true
+          else
+            echo "[WARN] Build noch nicht finished laut JSON – kein Download."
+          fi
+          ls -lah || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-metadata
+          path: build.json
+
+      - name: Upload APK (falls vorhanden)
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: app-release.apk
+          if-no-files-found: ignore
