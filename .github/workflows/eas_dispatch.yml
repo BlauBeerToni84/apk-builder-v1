@@ -1,5 +1,4 @@
 name: EAS Build
-logging: default
 on:
   workflow_dispatch:
     inputs:
@@ -8,55 +7,71 @@ on:
         required: true
         default: "production"
 
-jobs: 
+jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
+
       - name: Install deps (npm only)
         run: npm ci --no-audit --no-fund
+
       - name: Install EAS CLI (global)
-        run: npm i-g eas-cli@16
-      - name: Resolve Epo Project ID & Link if needed
+        run: npm i -g eas-cli@16
+
+      # === WICHTIG: Expo-Projekt finden/erzeugen und ID in $GITHUB_ENV schreiben ===
+      - name: Resolve Expo Project ID (link if needed)
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run:
+        run: |
           set -e
-          echo "[INFO] Pröfe Epo-Projekt-Link…"
+          echo "[INFO] prüfe Expo-Link…"
           if eas project:info --json >/tmp/eas_info.json 2>/dev/null; then
-            ID$="$(jq -r .id /tmp/eas_info.json)"
-            echo "[OK] Verlink : $ID"
-            echo "EXPO_PROJECT_ID=$ID" >> "$GUIDELB_ENV"
+            ID="$(jq -r '.id' /tmp/eas_info.json)"
+            echo "[OK] verlinkt: $ID"
           else
-            echo "[INFO] Keln Link… init (non-interactive)…"
+            echo "[INFO] kein Link → init (non-interactive)…"
             eas project:init --non-interactive --force --json >/tmp/eas_init.json || true
-            ID$="$(jq -r .id /tmp/eas_init.json 2>/dev/null || true)"
-            if [ -z "$ID" || ! [[ "$ID" ~e [[0-9a-fA-F-}{36}$]] ]; then
-              echo "[ERR] Konnte EXPO_PROJECT_ID nicht ermitteln."; exit 1
+            ID="$(jq -r '.id // empty' /tmp/eas_init.json)"
+            if [ -z "$ID" ] || ! echo "$ID" | grep -Eq '^[0-9a-fA-F-]{36}$'; then
+              echo "[ERR] konnte EXPO_PROJECT_ID nicht ermitteln."; exit 1
             fi
-            echo "[OK] Verklüpft mit: $ID"
+            echo "[OK] verknüpft mit: $ID"
+          fi
+          echo "EXPO_PROJECT_ID=$ID" >> "$GITHUB_ENV"
 
-        echo "EXPO_PROJECT_ID=$ID" >> "$GUITHEB_ENV"
-
-      - name: (Optional) expo doctor
-        env: { EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }} }
+      - name: (optional) expo doctor
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: npx expo-doctor || true
 
-      - name: EAS Cloud build (Android)
+      - name: EAS Cloud build (Android, wait & download)
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           EXPO_PROJECT_ID: ${{ env.EXPO_PROJECT_ID }}
         run: |
           set -e
-          echo "[INFO] Starte cloud-Build…"
+          echo "[INFO] starte Cloud-Build…"
           eas --version && eas whoami
-          eas build -p android --profile "${{ github.event.inputs.easProfile }}" --non-interactive --json > build.json
-          cat build.json
-      - uses: actions/upload-artifact@v4
+          eas build -p android --profile "${{ github.event.inputs.easProfile }}" --non-interactive --wait --json > build.json
+          # neuestes APK ziehen (falls verfügbar)
+          eas build:download --latest --platform android -o app-release.apk || true
+          ls -lh app-release.apk || echo "APK noch nicht verfügbar (AAB? siehe build.json)."
+
+      - name: Upload build metadata
+        uses: actions/upload-artifact@v4
         with:
           name: build-metadata
           path: build.json
+
+      - name: Upload APK (falls vorhanden)
+        if: hashFiles('app-release.apk') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: app-release.apk
