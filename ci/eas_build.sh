@@ -38,7 +38,7 @@ else
   fi
   # Nach init erneut info ziehen
   eas project:info --json > /tmp/info.json 2> /tmp/info.err || true
-  ID="$(get_id_from_file /tmp.info.json /tmp/info.err)"
+  ID="$(get_id_from_file /tmp/info.json /tmp/info.err)"
 fi
 
 # Wenn noch leer → Debug-Ausgaben und Abbruch
