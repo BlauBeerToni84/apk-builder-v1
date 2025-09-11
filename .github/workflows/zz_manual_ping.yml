@@ -1,0 +1,14 @@
+name: Manual Ping
+on:
+  workflow_dispatch:
+    inputs:
+      msg:
+        description: "Message"
+        required: false
+        default: "pong"
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "ping -> ${{ github.event.inputs.msg }}"
