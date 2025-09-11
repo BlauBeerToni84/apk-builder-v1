@@ -18,55 +18,33 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Ensure minimal configs (no commit, just for CI)
-        run: |
-          set -euo pipefail
-          if [ ! -f app.json ] && [ ! -f app.config.js ]; then
-            cat > app.json <<'JSON'
-{
-  "expo": {
-    "name": "K1W1 Builder",
-    "slug": "k1w1-builder",
-    "android": { "package": "com.k1w1.builder" }
-  }
-}
-JSON
-          fi
-          if [ ! -f eas.json ]; then
-            cat > eas.json <<'JSON'
-{
-  "build": {
-    "production": {
-      "android": { "buildType": "apk" }
-    }
-  }
-}
-JSON
-          fi
-
-      - name: Install deps (npm)
+      - name: Install deps
         run: npm ci --no-audit --no-fund
 
-      - name: Install EAS CLI (global, no yarn)
+      - name: Install EAS CLI (global, npm-only)
         run: npm i -g eas-cli@16
 
-      - name: Ensure Docker is up
-        run: |
-          sudo systemctl start docker 2>/dev/null || sudo service docker start 2>/dev/null || true
-          docker info >/dev/null
-
-      - name: Local Android build (APK) with EAS (no Expo account)
+      - name: Verify EAS auth
         env:
-          EAS_NO_VCS: "1"
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: eas whoami
+
+      - name: EAS Cloud build (wait & download)
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           CI: "true"
         run: |
           set -e
-          eas --version
-          eas build --local -p android --profile ${{ github.event.inputs.easProfile }} \
-            --non-interactive --output app-release.apk
+          # Cloud build, warte bis fertig, schreibe Summary JSON
+          eas build -p android --profile ${{ github.event.inputs.easProfile }} --non-interactive --wait --json > build.json
+          # Neueste Android-APK ziehen
+          eas build:download --latest --platform android -o app-release.apk
+          ls -lh app-release.apk || (echo "APK fehlt" && exit 1)
 
-      - name: Upload APK artifact
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: app-release
-          path: app-release.apk
+          path: |
+            app-release.apk
+            build.json
