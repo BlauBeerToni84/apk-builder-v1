@@ -6,18 +6,16 @@ echo "[INFO] expo auth:"
 eas --version || true
 eas whoami || true
 
-# Stelle sicher, dass app.json Name/Slug/Owner hat und ggf. invalide projectId rausfliegt
+# ensure app.json has name/slug/owner; drop invalid projectId
 bash ci/_ensure_app_json.sh
 
-# --- Hilfsfunktion: ID aus JSON ODER Text extrahieren ---
+# --- helper: get first UUID from json or text ---
 get_id_from_file() {
   local f1="$1"; shift || true
   local f2="${1:-}"; shift || true
-  # JSON versuchen
   local _id
   _id="$(jq -r '.id // empty' "$f1" 2>/dev/null || true)"
   if [ -z "${_id:-}" ]; then
-    # Fallback: erste UUID in (Text-)Ausgaben greifen
     _id="$(grep -Eo '[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}' "$f1" ${f2:+$f2} 2>/dev/null | head -n1 || true)"
   fi
   printf '%s' "${_id:-}"
@@ -25,16 +23,19 @@ get_id_from_file() {
 
 echo "[INFO] resolve EXPO_PROJECT_ID ..."
 ID=""
+
+# 1) Try JSON output
 if eas project:info --json > /tmp/info.json 2> /tmp/info.err; then
-  ID="$(get_id_from_file /tmp/info.json /tmp/info.err)"
-if [ -z "${ID:-}" ]; then
-if [ -z "${ID:-}" ]; then
-  ID="$(jq -r '.expo.extra.eas.projectId // empty' app.json 2>/dev/null | head -n1 || true)"
+  ID="$(jq -r '.id // empty' /tmp/info.json || true)"
 fi
-  ID="$(jq -r '.expo.extra.eas.projectId // empty' app.json 2>/dev/null | head -n1 || true)"
+
+# 2) Fallback: from app.json (EAS writes projectId there)
+if [ -z "${ID:-}" ]; then
+  ID="$(jq -r '.expo.extra.eas.projectId // empty' app.json 2>/dev/null || true)"
 fi
-  echo "[OK] linked (project:info): ${ID:-<empty>}"
-else
+
+# 3) If still empty: init, then retry
+if [ -z "${ID:-}" ]; then
   echo "[INFO] no link -> project:init (non-interactive, reads app.json)"
   if ! eas project:init --non-interactive --force > /tmp/init.out 2> /tmp/init.err; then
     echo "[ERR] project:init failed"
@@ -42,18 +43,21 @@ else
     echo "=== init.out (first 200) ==="; sed -n '1,200p' /tmp/init.out || true
     exit 1
   fi
-  # Nach init erneut info ziehen
-  eas project:info --json > /tmp/info.json 2> /tmp/info.err || true
-  ID="$(get_id_from_file /tmp/info.json /tmp/info.err)"
-if [ -z "${ID:-}" ]; then
-if [ -z "${ID:-}" ]; then
-  ID="$(jq -r '.expo.extra.eas.projectId // empty' app.json 2>/dev/null | head -n1 || true)"
-fi
-  ID="$(jq -r '.expo.extra.eas.projectId // empty' app.json 2>/dev/null | head -n1 || true)"
-fi
+
+  # after init, prefer app.json projectId
+  ID="$(jq -r '.expo.extra.eas.projectId // empty' app.json 2>/dev/null || true)"
+
+  if [ -z "${ID:-}" ]; then
+    if eas project:info --json > /tmp/info.json 2> /tmp/info.err; then
+      ID="$(jq -r '.id // empty' /tmp/info.json || true)"
+    fi
+    if [ -z "${ID:-}" ]; then
+      ID="$(get_id_from_file /tmp/info.json /tmp/info.err)"
+    fi
+  fi
 fi
 
-# Wenn noch leer → Debug-Ausgaben und Abbruch
+# 4) Validate and dump helpful context if bad
 if [ -z "${ID:-}" ] || ! printf '%s' "$ID" | grep -Eq '^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$'; then
   echo "[ERR] invalid EXPO_PROJECT_ID"
   echo "=== info.json ==="; sed -n '1,200p' /tmp/info.json 2>/dev/null || true
@@ -74,7 +78,7 @@ eas build -p android --profile "${EAS_PROFILE}" --non-interactive --wait --json 
 echo "[OK] build.json:"
 sed -n '1,200p' build.json || true
 
-# --wait liefert Array von Builds – check auf finished
+# --wait returns an array; check finished
 if jq -e 'any(.[]?; .status == "finished" or .composite_status == "finished")' build.json >/dev/null 2>&1; then
   echo "[INFO] download APK/AAB"
   eas build:download -p android --latest --profile "${EAS_PROFILE}" --path app-release.apk || true
